@@ -1,0 +1,44 @@
+[package]
+name = "webserver-base"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.70"
+authors = ["Todd Everett Griffin <toddgriffin@protonmail.com>"]
+readme = "README.md"
+repository = "https://github.com/goddtriffin/webserver-base"
+homepage = "https://www.toddgriffin.me/"
+description = "A Rust library which contains shared logic for all of my webserver projects."
+license-file = "LICENSE"
+keywords = ["Todd", "Everett", "Griffin", "webserver", "base"]
+categories = ["web-programming"]
+exclude = [
+    ".idea/*",
+    ".github/*",
+]
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+# axum
+axum = {version = "0.6.18", features = ["ws", "headers", "multipart", "tracing", "macros", "tokio"]}
+
+# tracing
+tracing = "0.1.37"
+
+# serde
+serde = { version = "1.0.163", features = ["derive"] }
+serde_json = "1.0.96"
+
+# templating
+handlebars = "4.3.7"
+pulldown-cmark = "0.9.3"
+
+# http request
+reqwest = { version = "0.11.18", default-features = false, features = [ "json", "rustls-tls" ] }
+
+# time
+chrono = "0.4.24"
+
+# plausible analytics
+plausible-rs = "0.1.2"

@@ -1,0 +1,90 @@
+use crate::TemplateRegistryError;
+use handlebars::{handlebars_helper, Handlebars};
+use serde::Serialize;
+use std::path::PathBuf;
+use std::{env, fs};
+use tracing::instrument;
+
+// a helper joins all values, using both hash and parameters
+handlebars_helper!(
+    join: |list: Vec<String>| list.join(",")
+);
+
+#[derive(Clone)]
+pub struct TemplateRegistry<'a> {
+    handlebars: Handlebars<'a>,
+}
+
+impl TemplateRegistry<'_> {
+    /// # Errors
+    ///
+    /// Will return `Error` if it encounters any `FileIO` or Handlebars Template errors.
+    ///
+    /// # Panics
+    ///
+    /// Will panic if a `template_file` is returned that somehow is not a file path to a file (like if it was a file path to a directory).
+    #[instrument(skip_all)]
+    pub fn new() -> Result<Self, TemplateRegistryError> {
+        // initialize Handlebars
+        let mut handlebars = Handlebars::new();
+
+        // register all helpers
+        handlebars.register_helper("join", Box::new(join));
+
+        // enforce strict templates
+        handlebars.set_strict_mode(true);
+
+        // find all HTML files at this hard-coded path
+        let mut html_path: PathBuf = env::current_dir()?;
+        html_path.push("html");
+        let template_files: Vec<PathBuf> =
+            TemplateRegistry::find_all_template_files(&mut html_path)?;
+        for template_file in template_files {
+            let file_name = template_file
+                .file_stem()
+                .expect("failed to extract stem (non-file-extension) part of template file name")
+                .to_string_lossy();
+            handlebars.register_template_file(file_name.as_ref(), &template_file)?;
+        }
+
+        Ok(Self { handlebars })
+    }
+
+    #[instrument(skip_all)]
+    fn find_all_template_files(
+        html_path: &mut PathBuf,
+    ) -> Result<Vec<PathBuf>, TemplateRegistryError> {
+        let mut template_files: Vec<PathBuf> = vec![];
+
+        for directory in &["layouts", "pages", "partials"] {
+            html_path.push(directory);
+            template_files.extend(TemplateRegistry::get_all_files(html_path)?);
+            html_path.pop();
+        }
+
+        Ok(template_files)
+    }
+
+    #[instrument(skip_all)]
+    fn get_all_files(current_dir: &PathBuf) -> Result<Vec<PathBuf>, TemplateRegistryError> {
+        let mut files: Vec<PathBuf> = vec![];
+
+        for entry in fs::read_dir(current_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            files.push(path);
+        }
+
+        Ok(files)
+    }
+
+    #[instrument(skip_all)]
+    pub fn render<T>(&self, name: &str, data: &T) -> String
+    where
+        T: Serialize,
+    {
+        self.handlebars
+            .render(name, data)
+            .unwrap_or_else(|_| panic!("attempted to render {name} template"))
+    }
+}
