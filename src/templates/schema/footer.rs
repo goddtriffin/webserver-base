@@ -1,7 +1,7 @@
 use crate::templates::Copyright;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Footer {
     copyright: Copyright,
 }

@@ -1,7 +1,7 @@
 use crate::templates::Twitter;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Metadata {
     language_code: String,
     country_code: String,

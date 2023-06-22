@@ -1,7 +1,7 @@
 use chrono::{Datelike, Utc};
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Copyright {
     start: String,
     end: String,
