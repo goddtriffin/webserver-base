@@ -19,10 +19,6 @@ impl TemplateRegistry<'_> {
     /// # Errors
     ///
     /// Will return `Error` if it encounters any `FileIO` or Handlebars Template errors.
-    ///
-    /// # Panics
-    ///
-    /// Will panic if a `template_file` is returned that somehow is not a file path to a file (like if it was a file path to a directory).
     #[instrument(skip_all)]
     pub fn new() -> Result<Self, TemplateRegistryError> {
         // initialize Handlebars
@@ -79,12 +75,11 @@ impl TemplateRegistry<'_> {
     }
 
     #[instrument(skip_all)]
-    pub fn render<T>(&self, name: &str, data: &T) -> String
+    pub fn render<T>(&self, name: &str, data: &T) -> Result<String, TemplateRegistryError>
     where
         T: Serialize,
     {
-        self.handlebars
-            .render(name, data)
-            .unwrap_or_else(|_| panic!("attempted to render {name} template"))
+        let rendered_template: String = self.handlebars.render(name, data)?;
+        Ok(rendered_template)
     }
 }
