@@ -49,7 +49,7 @@ impl Metadata {
 
     #[allow(dead_code)]
     #[must_use]
-    fn new_with_defaults(
+    pub fn new_with_defaults(
         project_description: &str,
         project_name: &str,
         home_url: &str,
