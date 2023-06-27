@@ -2,7 +2,7 @@ use crate::Environment;
 use std::env;
 
 #[derive(Clone)]
-pub struct Settings {
+pub struct BaseSettings {
     pub host: String,
     pub port: u16,
     pub environment: Environment,
@@ -17,7 +17,7 @@ pub struct Settings {
     pub uptime_domain: String,
 }
 
-impl Default for Settings {
+impl Default for BaseSettings {
     /// # Panics
     ///
     /// Will panic if env var `PORT` is not a u16.

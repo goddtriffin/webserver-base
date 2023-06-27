@@ -1,4 +1,4 @@
-use crate::{Environment, Settings};
+use crate::{BaseSettings, Environment};
 use axum::headers::HeaderMap;
 use axum::http::StatusCode;
 use plausible_rs::{EventHeaders, EventPayload, Plausible, PAGEVIEW_EVENT};
@@ -33,7 +33,7 @@ impl AxumPlausibleAnalyticsHandler {
     pub async fn handle(
         self: Arc<Self>,
         headers: HeaderMap,
-        settings: Settings,
+        settings: BaseSettings,
         addr: SocketAddr,
         incoming_payload: RequestPayload,
     ) -> StatusCode {

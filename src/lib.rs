@@ -1,7 +1,7 @@
 mod axum_plausible_analytics;
-mod settings;
+mod base_settings;
 mod templates;
 
 pub use axum_plausible_analytics::*;
-pub use settings::*;
+pub use base_settings::*;
 pub use templates::*;
