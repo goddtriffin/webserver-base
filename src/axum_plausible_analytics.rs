@@ -1,6 +1,5 @@
 use crate::{BaseSettings, Environment};
-use axum::headers::HeaderMap;
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
 use plausible_rs::{EventHeaders, EventPayload, Plausible, PAGEVIEW_EVENT};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};

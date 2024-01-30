@@ -1,8 +1,8 @@
 [package]
 name = "webserver-base"
-version = "0.1.5"
+version = "0.1.6"
 edition = "2021"
-rust-version = "1.70"
+rust-version = "1.75"
 authors = ["Todd Everett Griffin <toddgriffin@protonmail.com>"]
 readme = "README.md"
 repository = "https://github.com/goddtriffin/webserver-base"
@@ -19,26 +19,40 @@ exclude = [
 [lib]
 path = "src/lib.rs"
 
+[lints.rust]
+unsafe_code = { level = "forbid", priority = 0 }
+
+[lints.clippy]
+nursery = { level = "allow", priority = 1 }
+all = { level = "deny", priority = -1 }
+correctness = { level = "deny", priority = -1 }
+suspicious = { level = "deny", priority = -1 }
+style = { level = "deny", priority = -1 }
+complexity = { level = "deny", priority = -1 }
+perf = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+cargo = { level = "deny", priority = -1 }
+
 [dependencies]
 # axum
-axum = {version = "0.6.18", features = ["ws", "headers", "multipart", "tracing", "macros", "tokio"]}
+axum = {version = "0.7.4", features = ["ws", "multipart", "tracing", "macros", "tokio"]}
 
 # tracing
-tracing = "0.1.37"
+tracing = "0.1.40"
 
 # serde
-serde = { version = "1.0.163", features = ["derive"] }
-serde_json = "1.0.96"
+serde = { version = "1.0.196", features = ["derive"] }
+serde_json = "1.0.113"
 
 # templating
-handlebars = "4.3.7"
-pulldown-cmark = "0.9.3"
+handlebars = "5.1.1"
+pulldown-cmark = "0.9.6"
 
 # http request
-reqwest = { version = "0.11.18", default-features = false, features = [ "json", "rustls-tls" ] }
+reqwest = { version = "0.11.23", default-features = false, features = [ "json", "rustls-tls" ] }
 
 # time
-chrono = "0.4.24"
+chrono = "0.4.33"
 
 # plausible analytics
 plausible-rs = "0.1.2"
