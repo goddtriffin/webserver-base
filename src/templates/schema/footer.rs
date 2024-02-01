@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Footer {
-    copyright: Copyright,
+    pub copyright: Copyright,
 }
 
 impl Footer {

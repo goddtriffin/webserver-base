@@ -2,8 +2,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NavLink {
-    display_name: String,
-    url: String,
+    pub display_name: String,
+    pub url: String,
 }
 
 impl NavLink {

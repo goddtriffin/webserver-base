@@ -2,8 +2,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Image {
-    name: String,
-    alt: String,
+    pub name: String,
+    pub alt: String,
 }
 
 impl Image {

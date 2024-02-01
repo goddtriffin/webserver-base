@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Header {
-    nav_links: Vec<NavLink>,
+    pub nav_links: Vec<NavLink>,
 }
 
 impl Header {

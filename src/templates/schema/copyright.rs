@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Copyright {
-    start: String,
-    end: String,
+    pub start: String,
+    pub end: String,
 }
 
 impl Copyright {

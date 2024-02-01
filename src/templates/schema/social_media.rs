@@ -2,8 +2,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SocialMedia {
-    name: String,
-    link: String,
+    pub name: String,
+    pub link: String,
 }
 
 impl SocialMedia {

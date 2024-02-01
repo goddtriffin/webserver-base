@@ -3,17 +3,17 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Metadata {
-    language_code: String,
-    country_code: String,
-    charset: String,
-    description: String,
-    project: String,
-    author: String,
-    twitter: Twitter,
-    home_url: String,
-    keywords: Vec<String>,
-    theme_color: String,
-    social_image: String,
+    pub language_code: String,
+    pub country_code: String,
+    pub charset: String,
+    pub description: String,
+    pub project: String,
+    pub author: String,
+    pub twitter: Twitter,
+    pub home_url: String,
+    pub keywords: Vec<String>,
+    pub theme_color: String,
+    pub social_image: String,
 }
 
 impl Metadata {

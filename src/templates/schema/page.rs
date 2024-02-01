@@ -2,10 +2,10 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Page {
-    display_name: String,
-    url: String,
-    style_sheets: Vec<String>,
-    scripts: Vec<String>,
+    pub display_name: String,
+    pub url: String,
+    pub style_sheets: Vec<String>,
+    pub scripts: Vec<String>,
 }
 
 impl Page {
