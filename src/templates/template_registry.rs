@@ -1,13 +1,19 @@
 use crate::TemplateRegistryError;
+use chrono::{DateTime, Utc};
 use handlebars::{handlebars_helper, Handlebars};
 use serde::Serialize;
 use std::path::PathBuf;
 use std::{env, fs};
 use tracing::instrument;
 
-// a helper joins all values, using both hash and parameters
+// comma-delimits a list of strings
 handlebars_helper!(
     join: |list: Vec<String>| list.join(",")
+);
+
+// prints a UTC date like "January 15, 1990"
+handlebars_helper!(
+    pretty_date: |date: DateTime<Utc>| date.format("%B %e, %Y").to_string()
 );
 
 #[derive(Clone)]
@@ -26,6 +32,7 @@ impl TemplateRegistry<'_> {
 
         // register all helpers
         handlebars.register_helper("join", Box::new(join));
+        handlebars.register_helper("pretty_date", Box::new(pretty_date));
 
         // enforce strict templates
         handlebars.set_strict_mode(true);
