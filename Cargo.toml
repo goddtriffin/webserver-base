@@ -1,6 +1,6 @@
 [package]
 name = "webserver-base"
-version = "0.1.8"
+version = "0.1.9"
 edition = "2021"
 rust-version = "1.75"
 authors = ["Todd Everett Griffin <toddgriffin@protonmail.com>"]
@@ -46,7 +46,7 @@ serde_json = "1.0.113"
 
 # templating
 handlebars = "5.1.0"
-pulldown-cmark = "0.9.6"
+pulldown-cmark = "0.10.0"
 
 # http request
 reqwest = { version = "0.11.24", default-features = false, features = [ "json", "rustls-tls" ] }
@@ -55,4 +55,4 @@ reqwest = { version = "0.11.24", default-features = false, features = [ "json", 
 chrono = { version = "0.4.33", features = ["default", "serde"] }
 
 # plausible analytics
-plausible-rs = "0.1.2"
+plausible-rs = "0.1.3"
