@@ -1,5 +1,11 @@
-[package]
-name = "webserver-base"
+[workspace]
+members = [
+    "webserver_base",
+    "template_web_server"
+]
+resolver = "2"
+
+[workspace.package]
 version = "0.1.10"
 edition = "2021"
 rust-version = "1.75"
@@ -16,13 +22,11 @@ exclude = [
     ".github/*",
 ]
 
-[lib]
-path = "src/lib.rs"
-
-[lints.rust]
+[workspace.lints.rust]
 unsafe_code = { level = "forbid", priority = 0 }
 
-[lints.clippy]
+[workspace.lints.clippy]
+multiple_crate_versions = { level = "allow", priority = 1 }
 nursery = { level = "allow", priority = 1 }
 all = { level = "deny", priority = -1 }
 correctness = { level = "deny", priority = -1 }
@@ -33,25 +37,4 @@ perf = { level = "deny", priority = -1 }
 pedantic = { level = "deny", priority = -1 }
 cargo = { level = "deny", priority = -1 }
 
-[dependencies]
-# axum
-axum = {version = "0.7.4", features = ["ws", "multipart", "tracing", "macros", "tokio"]}
-
-# tracing
-tracing = "0.1.40"
-
-# serde
-serde = { version = "1.0.196", features = ["derive"] }
-serde_json = "1.0.113"
-
-# templating
-handlebars = "5.1.0"
-
-# http request
-reqwest = { version = "0.11.24", default-features = false, features = [ "json", "rustls-tls" ] }
-
-# time
-chrono = { version = "0.4.33", features = ["default", "serde"] }
-
-# plausible analytics
-plausible-rs = "0.1.3"
+[workspace.dependencies]

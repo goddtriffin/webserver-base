@@ -1,0 +1,26 @@
+[package]
+name = "template-web-server"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+readme.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description.workspace = true
+license-file.workspace = true
+keywords.workspace = true
+categories.workspace = true
+exclude.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+path = "src/main.rs"
+name = "template-web-server"
+
+[lints]
+workspace = true
+
+[dependencies]
