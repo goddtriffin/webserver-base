@@ -1,0 +1,52 @@
+{{! Robots }}
+<meta name="robots" content="all" />
+
+{{! Standard }}
+<meta charset="{{metadata.charset}}" />
+<title>{{> page-display-name ~}}</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0" />
+<meta name="description" content="{{metadata.description}}" />
+<meta name="summary" content="{{metadata.description}}" />
+<meta name="keywords" content="{{join metadata.keywords}}" />
+<meta name="author" content="{{metadata.author}}" />
+<meta name="application-name" content="{{metadata.project}}" />
+<meta name="copyright" content="{{metadata.author}}" />
+<meta name="subject" content="{{metadata.project}}" />
+<meta name="topic" content="{{metadata.project}}" />
+<meta name="designer" content="{{metadata.author}}" />
+<meta name="owner" content="{{metadata.author}}" />
+
+{{! OpenGraph }}
+{{! https://ogp.me/ }}
+<meta property="og:title" content="{{> page-display-name ~}}" />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="{{> canonical-url ~}}" />
+<meta property="og:image" content="{{metadata.social_image}}" />
+<meta property="og:image:alt" content="{{> page-display-name ~}}" />
+<meta property="og:description" content="{{metadata.description}}" />
+<meta property="og:locale" content="{{metadata.language_code}}_{{metadata.country_code}}" />
+<meta property="og:site_name" content="{{metadata.project}}" />
+<meta property="og:see_also" content="https://www.toddgriffin.me/" />
+<meta property="og:see_also" content="https://www.instagram.com/goddtriffin/" />
+<meta property="og:see_also" content="https://www.facebook.com/goddtriffin/" />
+<meta property="og:see_also" content="https://www.youtube.com/channel/UC1YNQd3SqLkl2CjwbvJBYoQ" />
+<meta property="og:see_also" content="https://github.com/goddtriffin" />
+
+{{! Twitter }}
+{{! https://developer.twitter.com/en/docs/tweets/optimize-with-cards/overview/abouts-cards }}
+<meta name="twitter:card" content="summary" />
+<meta name="twitter:creator" content="{{metadata.twitter.username}}" />
+<meta name="twitter:site" content="{{metadata.twitter.username}}" />
+<meta name="twitter:title" content="{{> page-display-name ~}}" />
+<meta name="twitter:description" content="{{metadata.description}}" />
+<meta name="twitter:url" content="{{> canonical-url ~}}" />
+<meta name="twitter:image" content="{{metadata.social_image}}" />
+<meta name="twitter:image:alt" content="{{> page-display-name ~}}" />
+
+{{! Android }}
+<meta name="theme-color" content="{{metadata.theme_color}}" />
+
+{{! Microformats }}
+<link href="{{> canonical-url ~}}" rel="canonical" />
+<link href="{{metadata.home_url}}" rel="home" />
+<link type="text/plain" rel="author" href="{{metadata.home_url}}/humans.txt" />

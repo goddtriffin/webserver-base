@@ -1,0 +1,27 @@
+@use "../abstracts/media-queries";
+@use "../abstracts/variables";
+
+.pdf {
+  // this is for the actual PDF file
+  display: flex;
+  align-items: center;
+  margin: 1rem auto;
+  border-radius: variables.$border-radius;
+  @include media-queries.for_breakpoint(desktop tablet) {
+    width: 90vw;
+    max-width: 900px;
+    height: 120vw;
+    max-height: 1200px;
+  }
+
+  // this is for the fallback text (for mobile browsers)
+  @include media-queries.for_breakpoint(mobile) {
+    width: 90%;
+  }
+  text-align: center;
+  > p {
+    > a {
+      text-decoration: underline;
+    }
+  }
+}

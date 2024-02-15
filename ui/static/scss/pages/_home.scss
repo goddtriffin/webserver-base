@@ -1,0 +1,16 @@
+@use "../abstracts/media-queries";
+@use "../abstracts/variables";
+
+.page-home {
+  text-align: center;
+
+  > p {
+    @include media-queries.for_breakpoint(desktop tablet) {
+      width: 33%;
+      margin: 1rem auto;
+    }
+    @include media-queries.for_breakpoint(mobile) {
+      margin: 2rem 1rem;
+    }
+  }
+}

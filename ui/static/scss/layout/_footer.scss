@@ -1,0 +1,26 @@
+@use "../abstracts/media-queries";
+
+footer {
+  grid-area: footer;
+
+  > * {
+    text-align: center;
+
+    @include media-queries.for_breakpoint(desktop tablet) {
+      font-size: 1.25rem;
+      margin-bottom: 0.75rem;
+    }
+    @include media-queries.for_breakpoint(mobile) {
+      font-size: 1rem;
+      margin-bottom: 1rem;
+      margin-left: 7px;
+      margin-right: 7px;
+    }
+  }
+
+  > p {
+    > a {
+      font-weight: bold;
+    }
+  }
+}

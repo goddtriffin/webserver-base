@@ -20,3 +20,24 @@ path = "src/lib.rs"
 workspace = true
 
 [dependencies]
+# axum
+axum.workspace = true
+
+# tracing
+tracing.workspace = true
+
+# serde
+serde.workspace = true
+serde_json.workspace = true
+
+# templating
+handlebars.workspace = true
+
+# http request
+reqwest.workspace = true
+
+# time
+chrono.workspace = true
+
+# plausible analytics
+plausible-rs.workspace = true

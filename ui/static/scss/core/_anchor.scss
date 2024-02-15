@@ -1,0 +1,13 @@
+@use "../abstracts/variables";
+
+a {
+  &:hover {
+    text-decoration: underline;
+  }
+
+  &, &:visited, &:focus, &:active {
+    text-decoration: none;
+  }
+
+  color: var(--color-on-background);
+}

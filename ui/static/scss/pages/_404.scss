@@ -1,0 +1,19 @@
+@use "../abstracts/media-queries";
+@use "../abstracts/variables";
+
+.page-404 {
+  text-align: center;
+
+  > picture {
+    > img {
+      border-radius: variables.$border-radius;
+
+      @include media-queries.for_breakpoint(desktop tablet) {
+        width: 300px;
+      }
+      @include media-queries.for_breakpoint(mobile) {
+        width: 150px;
+      }
+    }
+  }
+}

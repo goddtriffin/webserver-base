@@ -1,0 +1,47 @@
+@use "../abstracts/variables";
+@use "../abstracts/media-queries";
+
+header {
+  display: grid;
+  grid-area: header;
+
+  @include media-queries.for_breakpoint(desktop tablet) {
+    grid-template-areas:
+      "logo nav"
+      "socials socials";
+  }
+  @include media-queries.for_breakpoint(mobile) {
+    grid-template-areas:
+      "logo"
+      "nav"
+      "socials";
+  }
+
+  > .logo {
+    grid-area: logo;
+
+    @include media-queries.for_breakpoint(desktop tablet) {
+      text-align: right;
+      margin-right: 4rem;
+    }
+    @include media-queries.for_breakpoint(mobile) {
+      text-align: center;
+    }
+  }
+
+  > .socials {
+    grid-area: socials;
+    text-align: center;
+  }
+}
+
+.social-media-icon {
+  display: inline-block;
+  width: 2.5rem;
+  height: 2.5rem;
+  margin: 0 0.5rem;
+
+  > a {
+    fill: var(--color-on-background);
+  }
+}
