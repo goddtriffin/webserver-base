@@ -69,13 +69,13 @@ build: ## builds the binary locally
 dev: build gen_js gen_css gen_static ## runs the development binary locally
 	cp target/debug/template-web-server bin/
 	cd bin && \
-		APP_ENVIRONMENT=development \
-		APP_NAME="template-web-server" \
-		APP_DESCRIPTION="Here is a description of the project." \
-		APP_HOME_URL="https://www.template-web-server.com" \
-		APP_KEYWORDS="Todd,Everett,Griffin,todo,project" \
-		APP_ANALYTICS_DOMAIN="test.toddgriffin.me" \
-		APP_UPTIME_DOMAIN="https://uptime.toddgriffin.me" \
+		ENVIRONMENT="development" \
+		PROJECT_NAME="template-web-server" \
+		PROJECT_DESCRIPTION="Here is a description of the project." \
+		PROJECT_KEYWORDS="Todd,Everett,Griffin,todo,project" \
+		HOME_URL="https://www.template-web-server.com" \
+		ANALYTICS_DOMAIN="test.toddgriffin.me" \
+		UPTIME_DOMAIN="https://uptime.toddgriffin.me" \
 		./template-web-server
 
 .PHONY: lint
@@ -91,7 +91,7 @@ test: ## runs tests
 
 .PHONY: build_docker
 build_docker: ## builds Docker container
-	docker build --tag goddtriffin/template-web-server:latest --file Dockerfile .
+	docker build --tag goddtriffin/template-web-server:latest --file ./Dockerfile .
 
 .PHONY: run_docker
 run_docker: build_docker ## runs a new Docker container
@@ -99,15 +99,16 @@ run_docker: build_docker ## runs a new Docker container
 	--name "template_web_server" \
 	-d --restart unless-stopped \
 	-p 8080:8080 \
-	-e APP_ENVIRONMENT="development" \
-	-e APP_HOST="0.0.0.0" \
-	-e APP_NAME="template-web-server" \
-    -e APP_DESCRIPTION="Here is a description of the project." \
-    -e APP_HOME_URL="https://www.template-web-server.com" \
-    -e APP_KEYWORDS="Todd,Everett,Griffin,todo,project" \
-    -e APP_ANALYTICS_DOMAIN="test.toddgriffin.me" \
-    -e APP_UPTIME_DOMAIN="https://uptime.toddgriffin.me" \
-	goddtriffin/template-web-server
+	-e ENVIRONMENT="development" \
+	-e HOST="0.0.0.0" \
+	-e PROJECT_NAME="template-web-server" \
+    -e PROJECT_DESCRIPTION="Here is a description of the project." \
+    -e PROJECT_KEYWORDS="Todd,Everett,Griffin,todo,project" \
+    -e HOME_URL="https://www.template-web-server.com" \
+    -e ANALYTICS_DOMAIN="test.toddgriffin.me" \
+	-e UPTIME_DOMAIN="https://uptime.toddgriffin.me" \
+	-e SENTRY_DSN=${SENTRY_DSN} \
+	goddtriffin/personal-website
 
 .PHONY: start_docker
 start_docker: ## resumes a stopped Docker container

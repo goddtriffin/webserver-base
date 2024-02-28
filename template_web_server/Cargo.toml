@@ -24,3 +24,50 @@ name = "template-web-server"
 workspace = true
 
 [dependencies]
+# OpenSSL bug fix (TODO - is there an easier fix?)
+openssl.workspace = true
+
+# tokio
+tokio.workspace = true
+
+# futures
+futures.workspace = true
+futures-util.workspace = true
+
+# axum
+axum.workspace = true
+axum-extra.workspace = true
+tower.workspace = true
+tower-http.workspace = true
+
+# http request
+reqwest.workspace = true
+
+# tracing
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+# serde
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml.workspace = true
+
+# error monitoring
+sentry.workspace = true
+
+# sitemap
+sitemap-rs.workspace = true
+xml-builder.workspace = true
+chrono.workspace = true
+
+# markdown
+pulldown-cmark.workspace = true
+
+# random
+rand.workspace = true
+
+# plausible analytics
+plausible-rs.workspace = true
+
+# webserver base
+webserver-base = { path = "../webserver_base" }

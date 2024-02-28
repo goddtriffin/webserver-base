@@ -4,12 +4,18 @@
 .page-home {
   text-align: center;
 
+  > h2 {
+    margin-bottom: 2rem;
+  }
+
   > p {
-    @include media-queries.for_breakpoint(desktop tablet) {
+    text-align: left;
+
+    @include media-queries.for_breakpoint(desktop) {
       width: 33%;
       margin: 1rem auto;
     }
-    @include media-queries.for_breakpoint(mobile) {
+    @include media-queries.for_breakpoint(tablet mobile) {
       margin: 2rem 1rem;
     }
   }

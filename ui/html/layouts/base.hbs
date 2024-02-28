@@ -5,7 +5,7 @@
         {{> favicon}}
 
         {{#each page.style_sheets}}
-        <link rel="stylesheet" type="text/css" href="/static/stylesheet/{{this}}" />
+        <link rel="stylesheet" type="text/css" href="{{this}}" />
         {{/each}}
     </head>
     <body class="color-background">
@@ -14,7 +14,7 @@
         {{> footer}}
 
         {{#each page.scripts}}
-        <script type="module" src="/static/script/{{this}}" defer></script>
+        <script type="module" src="{{this}}" defer></script>
         {{/each}}
     </body>
 </html>

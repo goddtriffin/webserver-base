@@ -8,12 +8,12 @@
 /* TEAM */
 
 Name: Todd Everett Griffin
-Site: www.toddgriffin.me
+Site: https://www.toddgriffin.me/
 Twitter: @goddtriffin
 From: Chicago Illinois USA, Fergus Ontario Canada
 
 /* SITE */
 
-Last Update: 2024/02/14
+Last Update: 2024/02/27
 Languages: English, Rust, HTML5, CSS3, Typescript
 Technology: 2023 16-inch 64GB M3 Max Macbook, RustRover
