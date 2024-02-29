@@ -1,0 +1,23 @@
+@use "../abstracts/variables";
+
+$media_queries: (
+        mobile: "(max-width: #{variables.$breakpoint-mobile})",
+        tablet: "(min-width: #{variables.$breakpoint-mobile + 1}) and (max-width: #{variables.$breakpoint-tablet})",
+        desktop: "(min-width: #{variables.$breakpoint-tablet + 1})"
+);
+
+@mixin for_breakpoint($breakpoints) {
+  $conditions: ();
+  @each $breakpoint in $breakpoints {
+    // If the key exists in the map
+    $conditions: append(
+                    $conditions,
+                    #{unquote(map-get($media_queries, $breakpoint))},
+                    comma
+    );
+  }
+
+  @media #{$conditions} {
+    @content;
+  }
+}

@@ -1,8 +1,7 @@
 # directories
-.idea/
-.vscode/
 target/
-bin/
+tests/
+.github/
 
 # files
-.DS_Store
+Dockerfile

@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "lib": ["dom", "dom.iterable", "dom.asynciterable", "deno.ns"]
+  },
+  "lint": {
+    "include": ["ui/static/script/"]
+  },
+  "fmt": {
+    "include": ["ui/static/script/"],
+    "lineWidth": 120
+  }
+}
