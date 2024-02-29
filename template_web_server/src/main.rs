@@ -179,10 +179,7 @@ async fn home(State(state): State<Arc<AppState>>) -> Html<String> {
                     String::from("Home"),
                     String::from("/"),
                     vec![String::from("/static/stylesheet/main.css")],
-                    vec![
-                        String::from("/static/script/scitylana.js"),
-                        String::from("/static/script/theme.js"),
-                    ],
+                    vec![String::from("/static/script/scitylana.js")],
                 )),
             )
             .unwrap(),
@@ -200,10 +197,7 @@ async fn four_oh_four(State(state): State<Arc<AppState>>) -> Html<String> {
                     String::from("404"),
                     String::from("/404"),
                     vec![String::from("/static/stylesheet/main.css")],
-                    vec![
-                        String::from("/static/script/scitylana.js"),
-                        String::from("/static/script/theme.js"),
-                    ],
+                    vec![String::from("/static/script/scitylana.js")],
                 )),
             )
             .unwrap(),
