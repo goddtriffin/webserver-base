@@ -83,10 +83,43 @@ impl AxumPlausibleAnalyticsHandler {
         if let Some(forwarded) = headers.get("Forwarded") {
             match forwarded.to_str() {
                 Ok(forwarded) => {
-                    error!("TODO - handle the HTTP 'Forwarded' header: {forwarded}");
+                    warn!("TODO - handle the HTTP 'Forwarded' header: {forwarded}");
                 }
                 Err(to_str_error) => {
                     error!("failed to parse HTTP 'Forwarded' header value: {to_str_error}");
+                }
+            }
+        }
+
+        if let Some(x_real_ip) = headers.get("X-Real-IP") {
+            match x_real_ip.to_str() {
+                Ok(x_real_ip) => {
+                    warn!("TODO - handle the HTTP 'X-Real-IP' header: {x_real_ip}");
+                }
+                Err(to_str_error) => {
+                    error!("failed to parse HTTP 'X-Real-IP' header value: {to_str_error}");
+                }
+            }
+        }
+
+        if let Some(cf_connecting_ip) = headers.get("CF-Connecting-IP") {
+            match cf_connecting_ip.to_str() {
+                Ok(cf_connecting_ip) => {
+                    warn!("TODO - handle the HTTP 'CF-Connecting-IP' header: {cf_connecting_ip}");
+                }
+                Err(to_str_error) => {
+                    error!("failed to parse HTTP 'CF-Connecting-IP' header value: {to_str_error}");
+                }
+            }
+        }
+
+        if let Some(true_client_ip) = headers.get("True-Client-IP") {
+            match true_client_ip.to_str() {
+                Ok(true_client_ip) => {
+                    warn!("TODO - handle the HTTP 'True-Client-IP' header: {true_client_ip}");
+                }
+                Err(to_str_error) => {
+                    error!("failed to parse HTTP 'True-Client-IP' header value: {to_str_error}");
                 }
             }
         }
@@ -100,7 +133,9 @@ impl AxumPlausibleAnalyticsHandler {
                     // client's actual IP address (all other entries are Network Proxies)
                     let x_forwarded_for_client_ip: Option<&&str> = parts.first();
                     if let Some(x_forwarded_for_client_ip) = x_forwarded_for_client_ip {
-                        return (*x_forwarded_for_client_ip).to_string();
+                        let x_forwarded_for: String = (*x_forwarded_for_client_ip).to_string();
+                        info!("found HTTP 'X-Forwarded-For' header: {x_forwarded_for}");
+                        return x_forwarded_for;
                     };
                 }
                 Err(to_str_error) => {
@@ -109,19 +144,9 @@ impl AxumPlausibleAnalyticsHandler {
             }
         }
 
-        if let Some(x_real_ip) = headers.get("X-Real-IP") {
-            match x_real_ip.to_str() {
-                Ok(x_real_ip) => {
-                    error!("TODO - handle the HTTP 'X-Real-IP' header: {x_real_ip}");
-                }
-                Err(to_str_error) => {
-                    error!("failed to parse HTTP 'X-Real-IP' header value: {to_str_error}");
-                }
-            }
-        }
-
         // failed to get 'true' IP address - default to the SocketAddr (proxy IP)
-        warn!("failed to resolve client's true IP address - defaulting to Axum's 'SocketAddr' (which is usually the IP address of an intermediary Network Proxy)");
-        addr.ip().to_string()
+        let axum_socketaddr_ip: String = addr.ip().to_string();
+        warn!("Failed to resolve client's true IP address. Defaulting to Axum's 'SocketAddr' IP (which is usually the IP address of an intermediary Network Proxy): {axum_socketaddr_ip}");
+        axum_socketaddr_ip
     }
 }
