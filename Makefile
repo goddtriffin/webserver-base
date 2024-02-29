@@ -108,7 +108,7 @@ run_docker: build_docker ## runs a new Docker container
     -e ANALYTICS_DOMAIN="test.toddgriffin.me" \
 	-e UPTIME_DOMAIN="https://uptime.toddgriffin.me" \
 	-e SENTRY_DSN=${SENTRY_DSN} \
-	goddtriffin/personal-website
+	goddtriffin/template-web-server
 
 .PHONY: start_docker
 start_docker: ## resumes a stopped Docker container

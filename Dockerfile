@@ -1,8 +1,10 @@
-FROM --platform=linux/amd64 rust:1.75.0-alpine3.19 AS binary_builder
+FROM --platform=linux/amd64 rust:1.76.0-alpine3.19 AS binary_builder
 
 # update alpine linux dependencies
 RUN apk update
 RUN apk add --no-cache git make musl-dev
+# needed for OpenSSL (vendored)
+RUN apk add --no-cache perl perl-dev
 
 WORKDIR /template-web-server
 
@@ -10,12 +12,13 @@ WORKDIR /template-web-server
 COPY .clippy.toml .
 COPY Cargo.toml .
 COPY Cargo.lock .
-COPY server server
+COPY template_web_server template_web_server
+COPY webserver_base webserver_base
 
 # generate binary
-RUN cargo build --release --package server --bin server
+RUN cargo build --release --package template-web-server --bin template-web-server
 
-FROM --platform=linux/amd64 denoland/deno:alpine-1.40.2 as js_builder
+FROM --platform=linux/amd64 denoland/deno:alpine-1.41.0 as js_builder
 
 # update alpine linux dependencies
 RUN apk update
@@ -31,14 +34,14 @@ COPY deno.jsonc .
 # generate Javascript
 RUN make gen_js
 
-FROM --platform=linux/amd64 node:21.6.0-alpine3.19 as css_builder
+FROM --platform=linux/amd64 node:21.6.2-alpine3.19 as css_builder
 
 # update alpine linux dependencies
 RUN apk update
 RUN apk add --no-cache make
 
 # install Sass
-RUN npm install -g sass@1.70.0
+RUN npm install -g sass@1.71.1
 
 WORKDIR /template-web-server
 
@@ -57,7 +60,7 @@ RUN apk update
 WORKDIR /template-web-server
 
 # copy binary
-COPY --from=binary_builder /template-web-server/target/release/server .
+COPY --from=binary_builder /template-web-server/target/release/template-web-server .
 
 # copy scripts
 COPY --from=js_builder /template-web-server/bin/static/script/ static/script/
@@ -72,6 +75,6 @@ COPY ui/static/image/ static/image/
 
 # run server
 EXPOSE 8080
-ENTRYPOINT ["./server"]
+ENTRYPOINT ["./template-web-server"]
 
 #ENTRYPOINT ["tail", "-f", "/dev/null"]

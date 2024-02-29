@@ -8,7 +8,7 @@ resolver = "2"
 [workspace.package]
 version = "0.1.10"
 edition = "2021"
-rust-version = "1.75"
+rust-version = "1.76"
 authors = ["Todd Everett Griffin <toddgriffin@protonmail.com>"]
 readme = "README.md"
 repository = "https://github.com/goddtriffin/webserver-base"
