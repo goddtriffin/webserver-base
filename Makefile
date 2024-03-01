@@ -24,7 +24,7 @@ watch_sass: ## hot reloads Sass stylesheets
 	sass --watch --update --style=compressed --no-source-map --color --unicode ui/static/scss:bin/static/stylesheet
 
 .PHONY: gen_js
-gen_js: ## generates Javascript from Typescript
+gen_js: # generates Javascript from Typescript
 	# generate/clean bin scripts
 	rm -rf bin/static/script
 	mkdir -p bin/static/script
@@ -33,7 +33,7 @@ gen_js: ## generates Javascript from Typescript
 	deno bundle ui/static/script/scitylana.ts bin/static/script/scitylana.js
 
 .PHONY: gen_css
-gen_css: ## generate CSS from SCSS
+gen_css: # generate CSS from SCSS
 	# generate/clean bin stylesheets
 	rm -rf bin/static/stylesheet
 	mkdir -p bin/static/stylesheet
@@ -42,7 +42,7 @@ gen_css: ## generate CSS from SCSS
 	sass --style=compressed --no-source-map --color --unicode ui/static/scss:bin/static/stylesheet
 
 .PHONY: gen_static
-gen_static: ## generates static resources
+gen_static: # generates static resources
 	# generate/clean bin
 	rm -rf bin/assets/
 	rm -rf bin/html/
@@ -56,11 +56,11 @@ gen_static: ## generates static resources
 	cp -R ui/static/image bin/static/image
 
 .PHONY: build
-build: ## builds the binary locally
+build: # builds the binary locally
 	cargo build --package template-web-server --bin template-web-server
 
 .PHONY: dev
-dev: build gen_js gen_css gen_static ## runs the development binary locally
+dev: build gen_js gen_css gen_static ## runs the development binary
 	cp target/debug/template-web-server bin/
 	cd bin && \
 		ENVIRONMENT="development" \
@@ -73,7 +73,7 @@ dev: build gen_js gen_css gen_static ## runs the development binary locally
 		./template-web-server
 
 .PHONY: lint
-lint: ## lints the codebase using rustfmt and Clippy
+lint: ## lints the codebase
 	cargo fmt
 	deno lint ui/static/script/
 	deno doc --lint ui/static/script/
@@ -87,7 +87,7 @@ test: ## runs tests
 	cargo test
 
 .PHONY: docs
-docs: ## generates documentation
+docs: ## generates local documentation
 	deno doc --html --name="webserver-base" ./ui/static/script/mod.ts
 
 .PHONY: publish_dry_run
@@ -100,11 +100,11 @@ publish_dry_run: ## dry run of publishing libraries to crates.io and JSR
 	echo "\033[1;35m[Finished Dry-Run Publish]\033[0m"
 
 .PHONY: build_docker
-build_docker: ## builds Docker container
+build_docker: # builds Docker container
 	docker build --tag goddtriffin/template-web-server:latest --file ./Dockerfile .
 
 .PHONY: run_docker
-run_docker: build_docker ## runs a new Docker container
+run_docker: build_docker ## builds/runs a new Docker container
 	docker run \
 	--name "template_web_server" \
 	-d --restart unless-stopped \
@@ -120,20 +120,13 @@ run_docker: build_docker ## runs a new Docker container
 	-e SENTRY_DSN=${SENTRY_DSN} \
 	goddtriffin/template-web-server
 
-.PHONY: start_docker
-start_docker: ## resumes a stopped Docker container
-	docker start template_web_server
-
-.PHONY: stop_docker
-stop_docker: ## stops the Docker container
-	docker stop template_web_server
-
 .PHONY: remove_docker
-remove_docker: stop_docker ## removes the Docker container
+remove_docker: ## removes Docker container
+	docker stop template_web_server
 	docker rm template_web_server
 
 .PHONY: push_docker
-push_docker: ## pushes new Docker image to Docker Hub
+push_docker: # pushes new Docker image to Docker Hub
 	# tag
 	docker tag goddtriffin/template-web-server:latest goddtriffin/minesweeper-royale-website:latest
 	docker tag goddtriffin/template-web-server:latest goddtriffin/rlhandbook-website:latest
@@ -153,14 +146,17 @@ push_docker: ## pushes new Docker image to Docker Hub
 	docker push goddtriffin/video-game-recipe-book-website:latest
 
 .PHONY: restart_deployment
-restart_deployment: ## restarts all pods in the k8s deployment
+restart_deployment: # restarts all pods in the k8s deployment
 	kubectl rollout restart deployment minesweeper-royale-website
 	kubectl rollout restart deployment rlhandbook-website
 	kubectl rollout restart deployment scannable-codes-website
 	kubectl rollout restart deployment turnbased-website
+	kubectl rollout restart deployment scribble-jump-website
+	kubectl rollout restart deployment triple-entendre-website
+	kubectl rollout restart deployment video-game-recipe-book-website
 
 .PHONY: deploy
-deploy: build_docker push_docker restart_deployment ## builds/pushes new docker image at :latest and restarts k8s deployment
+deploy: build_docker push_docker restart_deployment ## builds/pushes new docker image and restarts k8s deployment
 
 .PHONY: mem_usage
 mem_usage: ## displays the memory usage of the currently running Docker container
