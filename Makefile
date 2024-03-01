@@ -90,6 +90,15 @@ test: ## runs tests
 docs: ## generates documentation
 	deno doc --html --name="webserver-base" ./ui/static/script/mod.ts
 
+.PHONY: publish_dry_run
+publish_dry_run: ## dry run of publishing libraries to crates.io and JSR
+	echo "\033[1;35m[Packaging Rust]\033[0m"
+	cargo publish --package webserver-base --dry-run
+	cargo package --list
+	echo "\033[1;35m[Packaging Typescript]\033[0m"
+	deno publish --dry-run
+	echo "\033[1;35m[Finished Dry-Run Publish]\033[0m"
+
 .PHONY: build_docker
 build_docker: ## builds Docker container
 	docker build --tag goddtriffin/template-web-server:latest --file ./Dockerfile .
