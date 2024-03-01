@@ -68,9 +68,9 @@ fn main() {
         settings.sentry_dsn.clone(),
         sentry::ClientOptions {
             release: sentry::release_name!(),
-            sample_rate: 1.0,
+            sample_rate: 0.1,
             attach_stacktrace: true,
-            traces_sample_rate: 0.2,
+            traces_sample_rate: 0.1,
             debug: false, // TODO - settings.environment == Environment::Development,
             ..Default::default()
         },
