@@ -1,12 +1,44 @@
 {
-  "compilerOptions": {
-    "lib": ["dom", "dom.iterable", "dom.asynciterable", "deno.ns"]
-  },
-  "lint": {
-    "include": ["ui/static/script/"]
-  },
-  "fmt": {
-    "include": ["ui/static/script/"],
-    "lineWidth": 120
-  }
+    "name": "@todd/webserver-base",
+    "version": "0.0.1",
+    "exports": {
+        ".": "./ui/static/script/mod.ts"
+    },
+    "exclude": [
+        ".github",
+        ".idea",
+        ".vscode",
+        "bin",
+        "docs",
+        "target",
+        "template_web_server",
+        "ui/html",
+        "ui/static/file",
+        "ui/static/image",
+        "ui/static/scss",
+        "webserver_base",
+        ".clippy.toml",
+        "Cargo*",
+        "Dockerfile",
+        "Makefile"
+    ],
+    "compilerOptions": {
+        "lib": [
+            "dom",
+            "dom.iterable",
+            "dom.asynciterable",
+            "deno.ns"
+        ]
+    },
+    "lint": {
+        "include": [
+            "ui/static/script/"
+        ]
+    },
+    "fmt": {
+        "include": [
+            "ui/static/script/"
+        ],
+        "lineWidth": 120
+    }
 }

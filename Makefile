@@ -29,14 +29,8 @@ gen_js: ## generates Javascript from Typescript
 	rm -rf bin/static/script
 	mkdir -p bin/static/script
 
-	# lint Typescript
-	deno lint --config deno.jsonc ui/static/script/
-
-	# format Typescript
-	deno fmt --config deno.jsonc ui/static/script/
-
 	# generate Javascript from Typescript
-	deno bundle --config deno.jsonc ui/static/script/scitylana.ts bin/static/script/scitylana.js
+	deno bundle ui/static/script/scitylana.ts bin/static/script/scitylana.js
 
 .PHONY: gen_css
 gen_css: ## generate CSS from SCSS
@@ -81,6 +75,9 @@ dev: build gen_js gen_css gen_static ## runs the development binary locally
 .PHONY: lint
 lint: ## lints the codebase using rustfmt and Clippy
 	cargo fmt
+	deno lint ui/static/script/
+	deno doc --lint ui/static/script/
+	deno fmt ui/static/script/
 
 .PHONY: test
 test: ## runs tests
@@ -88,6 +85,10 @@ test: ## runs tests
 	cargo check
 	cargo clippy --tests
 	cargo test
+
+.PHONY: docs
+docs: ## generates documentation
+	deno doc --html --name="webserver-base" ./ui/static/script/mod.ts
 
 .PHONY: build_docker
 build_docker: ## builds Docker container
