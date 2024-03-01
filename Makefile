@@ -134,7 +134,23 @@ remove_docker: stop_docker ## removes the Docker container
 
 .PHONY: push_docker
 push_docker: ## pushes new Docker image to Docker Hub
-	docker push goddtriffin/template-web-server:latest
+	# tag
+	docker tag goddtriffin/template-web-server:latest goddtriffin/minesweeper-royale-website:latest
+	docker tag goddtriffin/template-web-server:latest goddtriffin/rlhandbook-website:latest
+	docker tag goddtriffin/template-web-server:latest goddtriffin/scannable-codes-website:latest
+	docker tag goddtriffin/template-web-server:latest goddtriffin/turnbased-website:latest
+	docker tag goddtriffin/template-web-server:latest goddtriffin/scribble-jump-website:latest
+	docker tag goddtriffin/template-web-server:latest goddtriffin/triple-entendre-website:latest
+	docker tag goddtriffin/template-web-server:latest goddtriffin/video-game-recipe-book-website:latest
+
+	# push
+	docker push goddtriffin/minesweeper-royale-website:latest
+	docker push goddtriffin/rlhandbook-website:latest
+	docker push goddtriffin/scannable-codes-website:latest
+	docker push goddtriffin/turnbased-website:latest
+	docker push goddtriffin/scribble-jump-website:latest
+	docker push goddtriffin/triple-entendre-website:latest
+	docker push goddtriffin/video-game-recipe-book-website:latest
 
 .PHONY: restart_deployment
 restart_deployment: ## restarts all pods in the k8s deployment
