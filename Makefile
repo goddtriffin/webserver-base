@@ -133,7 +133,6 @@ push_docker: # pushes new Docker image to Docker Hub
 	docker tag goddtriffin/template-web-server:latest goddtriffin/scannable-codes-website:latest
 	docker tag goddtriffin/template-web-server:latest goddtriffin/turnbased-website:latest
 	docker tag goddtriffin/template-web-server:latest goddtriffin/scribble-jump-website:latest
-	docker tag goddtriffin/template-web-server:latest goddtriffin/triple-entendre-website:latest
 	docker tag goddtriffin/template-web-server:latest goddtriffin/video-game-recipe-book-website:latest
 
 	# push
@@ -142,7 +141,6 @@ push_docker: # pushes new Docker image to Docker Hub
 	docker push goddtriffin/scannable-codes-website:latest
 	docker push goddtriffin/turnbased-website:latest
 	docker push goddtriffin/scribble-jump-website:latest
-	docker push goddtriffin/triple-entendre-website:latest
 	docker push goddtriffin/video-game-recipe-book-website:latest
 
 .PHONY: restart_deployment
@@ -152,7 +150,6 @@ restart_deployment: # restarts all pods in the k8s deployment
 	kubectl rollout restart deployment scannable-codes-website
 	kubectl rollout restart deployment turnbased-website
 	kubectl rollout restart deployment scribble-jump-website
-	kubectl rollout restart deployment triple-entendre-website
 	kubectl rollout restart deployment video-game-recipe-book-website
 
 .PHONY: deploy
