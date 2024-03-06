@@ -24,9 +24,6 @@ name = "template-web-server"
 workspace = true
 
 [dependencies]
-# OpenSSL bug fix (TODO - is there an easier fix?)
-openssl.workspace = true
-
 # tokio
 tokio.workspace = true
 

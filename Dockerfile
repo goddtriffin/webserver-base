@@ -3,8 +3,6 @@ FROM --platform=linux/amd64 rust:1.76.0-alpine3.19 AS binary_builder
 # update alpine linux dependencies
 RUN apk update
 RUN apk add --no-cache git make musl-dev
-# needed for OpenSSL (vendored)
-RUN apk add --no-cache perl perl-dev
 
 WORKDIR /template-web-server
 
