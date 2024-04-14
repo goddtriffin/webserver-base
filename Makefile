@@ -134,6 +134,7 @@ push_docker: # pushes new Docker image to Docker Hub
 	docker tag goddtriffin/template-web-server:latest goddtriffin/turnbased-website:latest
 	docker tag goddtriffin/template-web-server:latest goddtriffin/scribble-jump-website:latest
 	docker tag goddtriffin/template-web-server:latest goddtriffin/video-game-recipe-book-website:latest
+	docker tag goddtriffin/template-web-server:latest goddtriffin/vogue-bot-website:latest
 
 	# push
 	docker push goddtriffin/minesweeper-royale-website:latest
@@ -142,6 +143,7 @@ push_docker: # pushes new Docker image to Docker Hub
 	docker push goddtriffin/turnbased-website:latest
 	docker push goddtriffin/scribble-jump-website:latest
 	docker push goddtriffin/video-game-recipe-book-website:latest
+	docker push goddtriffin/vogue-bot-website:latest
 
 .PHONY: restart_deployment
 restart_deployment: # restarts all pods in the k8s deployment
