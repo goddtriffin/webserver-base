@@ -153,6 +153,7 @@ restart_deployment: # restarts all pods in the k8s deployment
 	kubectl rollout restart deployment turnbased-website
 	kubectl rollout restart deployment scribble-jump-website
 	kubectl rollout restart deployment video-game-recipe-book-website
+	kubectl rollout restart deployment vogue-bot-website
 
 .PHONY: deploy
 deploy: build_docker push_docker restart_deployment ## builds/pushes new docker image and restarts k8s deployment
