@@ -11,7 +11,7 @@ description.workspace = true
 license-file.workspace = true
 keywords.workspace = true
 categories.workspace = true
-exclude.workspace = true
+include.workspace = true
 
 [lib]
 path = "src/lib.rs"

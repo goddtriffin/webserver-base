@@ -31,16 +31,13 @@ impl Default for BaseSettings {
         });
 
         // host:port
-        let host = env::var("HOST").map_or_else(
-            |_| {
-                if environment == Environment::Development {
-                    "127.0.0.1".to_string()
-                } else {
-                    "0.0.0.0".to_string()
-                }
-            },
-            |s| s,
-        );
+        let host = env::var("HOST").unwrap_or_else(|_| {
+            if environment == Environment::Development {
+                "127.0.0.1".to_string()
+            } else {
+                "0.0.0.0".to_string()
+            }
+        });
         let port = env::var("PORT").map_or(8080, |s| {
             s.parse::<u16>()
                 .expect("failed to parse `PORT` environment variable")

@@ -86,6 +86,11 @@ test: ## runs tests
 	cargo clippy --tests
 	cargo test
 
+.PHONY: fix
+fix: ## fixes the codebase
+	cargo fix --allow-dirty
+	cargo clippy --fix --allow-dirty
+
 .PHONY: docs
 docs: ## generates local documentation
 	deno doc --html --name="webserver-base" ./ui/static/script/mod.ts
@@ -120,8 +125,8 @@ run_docker: build_docker ## builds/runs a new Docker container
 	-e SENTRY_DSN=${SENTRY_DSN} \
 	goddtriffin/template-web-server
 
-.PHONY: remove_docker
-remove_docker: ## removes Docker container
+.PHONY: stop_docker
+stop_docker: ## stops Docker container
 	docker stop template_web_server
 	docker rm template_web_server
 

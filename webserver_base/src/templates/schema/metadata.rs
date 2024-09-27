@@ -17,7 +17,7 @@ pub struct Metadata {
 }
 
 impl Metadata {
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     #[must_use]
     pub fn new(
         language_code: String,
@@ -47,7 +47,6 @@ impl Metadata {
         }
     }
 
-    #[allow(dead_code)]
     #[must_use]
     pub fn new_with_defaults(
         project_description: &str,

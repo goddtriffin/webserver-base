@@ -18,7 +18,6 @@ pub struct TemplateData {
 
 impl TemplateData {
     #[must_use]
-    #[allow(clippy::too_many_lines)]
     pub fn new(settings: BaseSettings) -> Self {
         let social_media: Vec<SocialMedia> = vec![
             SocialMedia::new("Twitter", "https://twitter.com/goddtriffin"),
