@@ -1,4 +1,8 @@
-FROM --platform=linux/amd64 rust:1.76.0-alpine3.19 AS binary_builder
+##########
+# Binary #
+##########
+
+FROM rust:1.83.0-alpine3.21 AS binary_builder
 
 # update alpine linux dependencies
 RUN apk update
@@ -16,7 +20,11 @@ COPY webserver_base webserver_base
 # generate binary
 RUN cargo build --release --package template-web-server --bin template-web-server
 
-FROM --platform=linux/amd64 denoland/deno:alpine-1.41.0 as js_builder
+##############
+# Javascript #
+##############
+
+FROM denoland/deno:alpine-2.1.1 AS js_builder
 
 # update alpine linux dependencies
 RUN apk update
@@ -32,7 +40,11 @@ COPY deno.jsonc .
 # generate Javascript
 RUN make gen_js
 
-FROM --platform=linux/amd64 node:21.6.2-alpine3.19 as css_builder
+#######
+# CSS #
+#######
+
+FROM node:23.3.0-alpine3.20 AS css_builder
 
 # update alpine linux dependencies
 RUN apk update
@@ -50,7 +62,11 @@ COPY ui/static/scss/ ui/static/scss/
 # generate stylesheet(s)
 RUN make gen_css
 
-FROM --platform=linux/amd64 alpine:3.19.1
+#######################
+# Template Web Server #
+#######################
+
+FROM alpine:3.20.3
 
 # update alpine linux dependencies
 RUN apk update

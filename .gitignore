@@ -7,3 +7,4 @@ docs/
 
 # files
 .DS_Store
+.template-web-server.env

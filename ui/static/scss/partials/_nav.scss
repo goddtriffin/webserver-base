@@ -1,5 +1,5 @@
-@use "../abstracts/variables";
-@use "../abstracts/media-queries";
+@use "../core/variables";
+@use "../core/media-queries";
 
 nav {
   grid-area: nav;
@@ -9,19 +9,21 @@ nav {
   @include media-queries.for_breakpoint(desktop tablet) {
     text-align: left;
   }
+
   @include media-queries.for_breakpoint(mobile) {
     text-align: center;
   }
 
-  > ul {
+  >ul {
     width: 100%;
 
     @include media-queries.for_breakpoint(desktop tablet) {}
+
     @include media-queries.for_breakpoint(mobile) {
       margin-bottom: 1rem;
     }
 
-    > li {
+    >li {
       display: inline-block;
       list-style-type: none;
 
@@ -29,6 +31,7 @@ nav {
         margin-right: 2rem;
         font-size: 1.25rem;
       }
+
       @include media-queries.for_breakpoint(mobile) {
         margin-right: 1rem;
         font-size: 1.25rem;

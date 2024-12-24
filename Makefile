@@ -30,7 +30,13 @@ gen_js: # generates Javascript from Typescript
 	mkdir -p bin/static/script
 
 	# generate Javascript from Typescript
-	deno bundle ui/static/script/scitylana.ts bin/static/script/scitylana.js
+	deno run \
+		--allow-read \
+		--allow-write \
+		--allow-env \
+		--allow-net \
+		--allow-run \
+		ui/static/script/bundle.ts
 
 .PHONY: gen_css
 gen_css: # generate CSS from SCSS
@@ -55,12 +61,9 @@ gen_static: # generates static resources
 	cp -R ui/static/file bin/static/file
 	cp -R ui/static/image bin/static/image
 
-.PHONY: build
-build: # builds the binary locally
-	cargo build --package template-web-server --bin template-web-server
-
 .PHONY: dev
 dev: build gen_js gen_css gen_static ## runs the development binary
+	cargo build --package template-web-server --bin template-web-server
 	cp target/debug/template-web-server bin/
 	cd bin && \
 		ENVIRONMENT="development" \
@@ -104,36 +107,33 @@ publish_dry_run: ## dry run of publishing libraries to crates.io and JSR
 	deno publish --dry-run
 	echo "\033[1;35m[Finished Dry-Run Publish]\033[0m"
 
-.PHONY: build_docker
-build_docker: # builds Docker container
-	docker build --tag goddtriffin/template-web-server:latest --file ./Dockerfile .
+.PHONY: docker_build
+docker_build: ## builds Docker container
+	docker build \
+		--platform linux/amd64 \
+		--tag goddtriffin/template-web-server:latest \
+		--file Dockerfile \
+		.
 
-.PHONY: run_docker
-run_docker: build_docker ## builds/runs a new Docker container
-	docker run \
-	--name "template_web_server" \
-	-d --restart unless-stopped \
-	-p 8080:8080 \
-	-e ENVIRONMENT="development" \
-	-e HOST="0.0.0.0" \
-	-e PROJECT_NAME="template-web-server" \
-    -e PROJECT_DESCRIPTION="Here is a description of the project." \
-    -e PROJECT_KEYWORDS="Todd,Everett,Griffin,todo,project" \
-    -e HOME_URL="https://www.template-web-server.com" \
-    -e ANALYTICS_DOMAIN="test.toddgriffin.me" \
-	-e UPTIME_DOMAIN="https://uptime.toddgriffin.me" \
-	-e SENTRY_DSN=${SENTRY_DSN} \
-	goddtriffin/template-web-server
+.PHONY: docker_run
+docker_run: ## runs Docker containers
+	docker compose up -d
 
-.PHONY: stop_docker
-stop_docker: ## stops Docker container
-	docker stop template_web_server
-	docker rm template_web_server
+.PHONY: docker_stop
+docker_stop: ## stops Docker containers
+	docker compose down
 
-.PHONY: push_docker
-push_docker: # pushes new Docker image to Docker Hub
+.PHONY: docker_logs
+docker_logs: ## displays Docker logs
+	docker compose logs template_web_server -f
+
+.PHONY: docker_mem_usage
+docker_mem_usage: ## displays the memory usage of the currently running Docker containers
+	docker stats template_web_server --no-stream --format "{{.Container}}: {{.MemUsage}}"
+
+.PHONY: docker_push
+docker_push: ## pushes Docker images to Docker Hub
 	# tag
-	docker tag goddtriffin/template-web-server:latest goddtriffin/minesweeper-royale-website:latest
 	docker tag goddtriffin/template-web-server:latest goddtriffin/rlhandbook-website:latest
 	docker tag goddtriffin/template-web-server:latest goddtriffin/scannable-codes-website:latest
 	docker tag goddtriffin/template-web-server:latest goddtriffin/turnbased-website:latest
@@ -141,29 +141,9 @@ push_docker: # pushes new Docker image to Docker Hub
 	docker tag goddtriffin/template-web-server:latest goddtriffin/video-game-recipe-book-website:latest
 
 	# push
-	docker push goddtriffin/minesweeper-royale-website:latest
+	docker push goddtriffin/template-web-server:latest
 	docker push goddtriffin/rlhandbook-website:latest
 	docker push goddtriffin/scannable-codes-website:latest
 	docker push goddtriffin/turnbased-website:latest
 	docker push goddtriffin/scribble-jump-website:latest
 	docker push goddtriffin/video-game-recipe-book-website:latest
-
-.PHONY: restart_deployment
-restart_deployment: # restarts all pods in the k8s deployment
-	kubectl rollout restart deployment minesweeper-royale-website
-	kubectl rollout restart deployment rlhandbook-website
-	kubectl rollout restart deployment scannable-codes-website
-	kubectl rollout restart deployment turnbased-website
-	kubectl rollout restart deployment scribble-jump-website
-	kubectl rollout restart deployment video-game-recipe-book-website
-
-.PHONY: deploy
-deploy: build_docker push_docker restart_deployment ## builds/pushes new docker image and restarts k8s deployment
-
-.PHONY: mem_usage
-mem_usage: ## displays the memory usage of the currently running Docker container
-	docker stats template_web_server --no-stream --format "{{.Container}}: {{.MemUsage}}"
-
-.PHONY: logs
-logs: ## displays logs from the currently running Docker container
-	docker logs template_web_server

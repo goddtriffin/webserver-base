@@ -68,10 +68,7 @@ fn main() {
         settings.sentry_dsn.clone(),
         sentry::ClientOptions {
             release: sentry::release_name!(),
-            sample_rate: 0.1,
             attach_stacktrace: true,
-            traces_sample_rate: 0.1,
-            debug: false, // TODO - settings.environment == Environment::Development,
             ..Default::default()
         },
     ));
@@ -81,12 +78,12 @@ fn main() {
         .enable_all()
         .build()
         .unwrap()
-        .block_on(async_main())
+        .block_on(async_main(settings))
         .unwrap();
 }
 
 #[instrument(skip_all)]
-async fn async_main() -> WebserverResult<()> {
+async fn async_main(settings: BaseSettings) -> WebserverResult<()> {
     // initialize tracing
     tracing_subscriber::Registry::default()
         .with(
@@ -97,9 +94,6 @@ async fn async_main() -> WebserverResult<()> {
         .with(tracing_subscriber::fmt::Layer::default())
         .with(sentry::integrations::tracing::layer())
         .init();
-
-    // env vars
-    let settings: BaseSettings = BaseSettings::default();
 
     // app state
     let app_state: AppState = AppState::new(&settings)?;

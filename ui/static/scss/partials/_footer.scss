@@ -1,15 +1,16 @@
-@use "../abstracts/media-queries";
+@use "../core/media-queries";
 
 footer {
   grid-area: footer;
 
-  > * {
+  >* {
     text-align: center;
 
     @include media-queries.for_breakpoint(desktop tablet) {
       font-size: 1.25rem;
       margin-bottom: 0.75rem;
     }
+
     @include media-queries.for_breakpoint(mobile) {
       font-size: 1rem;
       margin-bottom: 1rem;
@@ -18,8 +19,8 @@ footer {
     }
   }
 
-  > p {
-    > a {
+  >p {
+    >a {
       font-weight: bold;
     }
   }

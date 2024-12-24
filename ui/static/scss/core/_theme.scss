@@ -1,121 +1,171 @@
 // (stolen from Material Design's color system: https://material.io/design/color/the-color-system.html#color-usage-and-palettes)
 :root {
+
   // Background
-  --color-background-light-theme: #fafafa;
-  --color-background-dark-theme: #121212;
+  & {
+    --color-background-light-theme: #fafafa;
+    --color-background-dark-theme: #121212;
+  }
+
   @media (prefers-color-scheme: light) {
     --color-background: var(--color-background-light-theme);
   }
+
   @media (prefers-color-scheme: dark) {
     --color-background: var(--color-background-dark-theme);
   }
 
   // On Background
-  --color-on-background-light-theme: #000;
-  --color-on-background-dark-theme: #fafafa;
+  & {
+    --color-on-background-light-theme: #000;
+    --color-on-background-dark-theme: #fafafa;
+  }
+
   @media (prefers-color-scheme: light) {
     --color-on-background: var(--color-on-background-light-theme);
   }
+
   @media (prefers-color-scheme: dark) {
     --color-on-background: var(--color-on-background-dark-theme);
   }
 
   // Surface
-  --color-surface-light-theme: #fafafa;
-  --color-surface-dark-theme: #121212;
+  & {
+    --color-surface-light-theme: #fafafa;
+    --color-surface-dark-theme: #121212;
+  }
+
   @media (prefers-color-scheme: light) {
     --color-surface: var(--color-surface-light-theme);
   }
+
   @media (prefers-color-scheme: dark) {
     --color-surface: var(--color-surface-dark-theme);
   }
 
   // On Surface
-  --color-on-surface-light-theme: #000;
-  --color-on-surface-dark-theme: #fafafa;
+  & {
+    --color-on-surface-light-theme: #000;
+    --color-on-surface-dark-theme: #fafafa;
+  }
+
   @media (prefers-color-scheme: light) {
     --color-on-surface: var(--color-on-surface-light-theme);
   }
+
   @media (prefers-color-scheme: dark) {
     --color-on-surface: var(--color-on-surface-dark-theme);
   }
 
   // Error
-  --color-error-light-theme: #b00020;
-  --color-error-dark-theme: #cf6679;
+  & {
+    --color-error-light-theme: #b00020;
+    --color-error-dark-theme: #cf6679;
+  }
+
+
   @media (prefers-color-scheme: light) {
     --color-error: var(--color-error-light-theme);
   }
+
   @media (prefers-color-scheme: dark) {
     --color-error: var(--color-error-dark-theme);
   }
 
   // On Error
-  --color-on-error-light-theme: #fafafa;
-  --color-on-error-dark-theme: #000;
+  & {
+    --color-on-error-light-theme: #fafafa;
+    --color-on-error-dark-theme: #000;
+  }
+
   @media (prefers-color-scheme: light) {
     --color-on-error: var(--color-on-error-light-theme);
   }
+
   @media (prefers-color-scheme: dark) {
     --color-on-error: var(--color-on-error-dark-theme);
   }
 
   // Primary
-  --color-primary-light-theme: #f7cb64;
-  --color-primary-dark-theme: #f7cb64;
+  & {
+    --color-primary-light-theme: #f7cb64;
+    --color-primary-dark-theme: #f7cb64;
+  }
+
   @media (prefers-color-scheme: light) {
     --color-primary: var(--color-primary-light-theme);
   }
+
   @media (prefers-color-scheme: dark) {
     --color-primary: var(--color-primary-dark-theme);
   }
 
   // Primary Variant
-  --color-primary-variant-light-theme: #f7cb64;
-  --color-primary-variant-dark-theme: #f7cb64;
+  & {
+    --color-primary-variant-light-theme: #f7cb64;
+    --color-primary-variant-dark-theme: #f7cb64;
+  }
+
   @media (prefers-color-scheme: light) {
     --color-primary-variant: var(--color-primary-variant-light-theme);
   }
+
   @media (prefers-color-scheme: dark) {
     --color-primary-variant: var(--color-primary-variant-dark-theme);
   }
 
   // On Primary
-  --color-on-primary-light-theme: #000;
-  --color-on-primary-dark-theme: #000;
+  & {
+    --color-on-primary-light-theme: #000;
+    --color-on-primary-dark-theme: #000;
+  }
+
   @media (prefers-color-scheme: light) {
     --color-on-primary: var(--color-on-primary-light-theme);
   }
+
   @media (prefers-color-scheme: dark) {
     --color-on-primary: var(--color-on-primary-dark-theme);
   }
 
   // Secondary
-  --color-secondary-light-theme: #000;
-  --color-secondary-dark-theme: #000;
+  & {
+    --color-secondary-light-theme: #000;
+    --color-secondary-dark-theme: #000;
+  }
+
   @media (prefers-color-scheme: light) {
     --color-secondary: var(--color-secondary-light-theme);
   }
+
   @media (prefers-color-scheme: dark) {
     --color-secondary: var(--color-secondary-dark-theme);
   }
 
   // Secondary Variant
-  --color-secondary-variant-light-theme: #000;
-  --color-secondary-variant-dark-theme: #000;
+  & {
+    --color-secondary-variant-light-theme: #000;
+    --color-secondary-variant-dark-theme: #000;
+  }
+
   @media (prefers-color-scheme: light) {
     --color-secondary-variant: var(--color-secondary-variant-light-theme);
   }
+
   @media (prefers-color-scheme: dark) {
     --color-secondary-variant: var(--color-secondary-variant-dark-theme);
   }
 
   // On Secondary
-  --color-on-secondary-light-theme: #000;
-  --color-on-secondary-dark-theme: #000;
+  & {
+    --color-on-secondary-light-theme: #000;
+    --color-on-secondary-dark-theme: #000;
+  }
+
   @media (prefers-color-scheme: light) {
     --color-on-secondary: var(--color-on-secondary-light-theme);
   }
+
   @media (prefers-color-scheme: dark) {
     --color-on-secondary: var(--color-on-secondary-dark-theme);
   }

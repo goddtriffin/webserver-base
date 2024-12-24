@@ -23,9 +23,9 @@ export async function scitylana(e: Event): Promise<void> {
     },
     body: new URLSearchParams({
       "user_agent": navigator.userAgent,
-      "url": window.location.href,
+      "url": globalThis.location.href,
       "referrer": document.referrer,
-      "screen_width": window.innerWidth.toString(),
+      "screen_width": globalThis.innerWidth.toString(),
     }),
   });
   if (!response.ok) {

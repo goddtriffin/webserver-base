@@ -1,5 +1,5 @@
-@use "../abstracts/variables";
-@use "../abstracts/media-queries";
+@use "../core/variables";
+@use "../core/media-queries";
 
 header {
   display: grid;
@@ -10,6 +10,7 @@ header {
       "logo nav"
       "socials socials";
   }
+
   @include media-queries.for_breakpoint(mobile) {
     grid-template-areas:
       "logo"
@@ -17,19 +18,20 @@ header {
       "socials";
   }
 
-  > .logo {
+  >.logo {
     grid-area: logo;
 
     @include media-queries.for_breakpoint(desktop tablet) {
       text-align: right;
       margin-right: 4rem;
     }
+
     @include media-queries.for_breakpoint(mobile) {
       text-align: center;
     }
   }
 
-  > .socials {
+  >.socials {
     grid-area: socials;
     text-align: center;
   }
@@ -41,7 +43,7 @@ header {
   height: 2.5rem;
   margin: 0 0.5rem;
 
-  > a {
+  >a {
     fill: var(--color-on-background);
   }
 }

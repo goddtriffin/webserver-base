@@ -1,20 +1,21 @@
-@use "../abstracts/media-queries";
-@use "../abstracts/variables";
+@use "../core/media-queries";
+@use "../core/variables";
 
 .page-home {
   text-align: center;
 
-  > h2 {
+  >h2 {
     margin-bottom: 2rem;
   }
 
-  > p {
+  >p {
     text-align: left;
 
     @include media-queries.for_breakpoint(desktop) {
       width: 33%;
       margin: 1rem auto;
     }
+
     @include media-queries.for_breakpoint(tablet mobile) {
       margin: 2rem 1rem;
     }

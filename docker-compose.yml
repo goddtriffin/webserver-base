@@ -1,0 +1,9 @@
+services:
+  template_web_server:
+    image: goddtriffin/template-web-server:latest
+    container_name: template_web_server
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    env_file:
+      - ./.template-web-server.env
