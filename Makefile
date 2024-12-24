@@ -62,7 +62,7 @@ gen_static: # generates static resources
 	cp -R ui/static/image bin/static/image
 
 .PHONY: dev
-dev: build gen_js gen_css gen_static ## runs the development binary
+dev: gen_js gen_css gen_static ## runs the development binary
 	cargo build --package template-web-server --bin template-web-server
 	cp target/debug/template-web-server bin/
 	cd bin && \
@@ -140,7 +140,6 @@ docker_push: ## pushes Docker images to Docker Hub
 	docker tag goddtriffin/template-web-server:latest goddtriffin/scribble-jump-website:latest
 	docker tag goddtriffin/template-web-server:latest goddtriffin/video-game-recipe-book-website:latest
 	docker tag goddtriffin/template-web-server:latest goddtriffin/vogue-bot-website:latest
-	docker tag goddtriffin/template-web-server:latest goddtriffin/palms-small-engine-website:latest
 
 	# push
 	docker push goddtriffin/rlhandbook-website:latest
@@ -149,4 +148,3 @@ docker_push: ## pushes Docker images to Docker Hub
 	docker push goddtriffin/scribble-jump-website:latest
 	docker push goddtriffin/video-game-recipe-book-website:latest
 	docker push goddtriffin/vogue-bot-website:latest
-	docker push goddtriffin/palms-small-engine-website:latest
