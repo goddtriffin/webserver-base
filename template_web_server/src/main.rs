@@ -30,12 +30,14 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 use webserver_base::{
-    AxumPlausibleAnalyticsHandler, BaseSettings, Page, RequestPayload, TemplateRegistry,
+    AxumPlausibleAnalyticsHandler, BaseSettings, CacheBuster, Page, RequestPayload,
+    TemplateRegistry,
 };
 
 #[derive(Clone)]
 struct AppState {
     settings: BaseSettings,
+    cache_buster: CacheBuster,
     template_registry: TemplateRegistry<'static>,
     template_data: TemplateData,
     plausible_client: Arc<AxumPlausibleAnalyticsHandler>,
@@ -44,12 +46,10 @@ struct AppState {
 impl AppState {
     #[instrument(skip_all)]
     pub fn new(settings: &BaseSettings) -> WebserverResult<Self> {
-        // HTML templates
-        let template_registry: TemplateRegistry = TemplateRegistry::new()?;
-
         Ok(Self {
             settings: settings.clone(),
-            template_registry,
+            cache_buster: CacheBuster::new("static"),
+            template_registry: TemplateRegistry::new()?,
             template_data: TemplateData::new(settings.clone()),
             plausible_client: Arc::new(AxumPlausibleAnalyticsHandler::new_with_client(
                 Client::new(),
@@ -96,10 +96,15 @@ async fn async_main(settings: BaseSettings) -> WebserverResult<()> {
         .init();
 
     // app state
-    let app_state: AppState = AppState::new(&settings)?;
+    let mut app_state: AppState = AppState::new(&settings)?;
 
     // sitemaps
     generate_sitemaps(&settings, &app_state)?;
+
+    // generate CacheBuster
+    app_state.cache_buster.gen_cache();
+    info!("{}", app_state.cache_buster);
+    app_state.cache_buster.print_to_file("..");
 
     // API routes
     let v1_api_routes: Router<Arc<AppState>> = Router::new()

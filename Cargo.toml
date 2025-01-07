@@ -83,6 +83,9 @@ sentry = { version = "0.34.0", default-features = false, features = [
   "rustls",
 ] }
 
+# crypto
+md5 = "0.7.0"
+
 # sitemap
 sitemap-rs = "0.2.2"
 xml-builder = "0.5.3"

@@ -30,6 +30,9 @@ tracing.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 
+# crypto
+md5.workspace = true
+
 # templating
 handlebars.workspace = true
 
