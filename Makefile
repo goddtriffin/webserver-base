@@ -72,7 +72,6 @@ dev: gen_js gen_css gen_static ## runs the development binary
 		PROJECT_KEYWORDS="Todd,Everett,Griffin,todo,project" \
 		HOME_URL="https://www.template-web-server.com" \
 		ANALYTICS_DOMAIN="test.toddgriffin.me" \
-		UPTIME_DOMAIN="https://uptime.toddgriffin.me" \
 		./template-web-server
 
 .PHONY: lint

@@ -46,11 +46,20 @@ struct AppState {
 impl AppState {
     #[instrument(skip_all)]
     pub fn new(settings: &BaseSettings) -> WebserverResult<Self> {
+        // sitemaps
+        generate_sitemaps(settings)?;
+
+        // generate CacheBuster (must occur after sitemap generation)
+        let mut cache_buster: CacheBuster = CacheBuster::new("static");
+        cache_buster.gen_cache();
+        info!("{}", cache_buster);
+        cache_buster.print_to_file("..");
+
         Ok(Self {
             settings: settings.clone(),
-            cache_buster: CacheBuster::new("static"),
+            cache_buster: cache_buster.clone(),
             template_registry: TemplateRegistry::new()?,
-            template_data: TemplateData::new(settings.clone()),
+            template_data: TemplateData::new(settings.clone(), &cache_buster),
             plausible_client: Arc::new(AxumPlausibleAnalyticsHandler::new_with_client(
                 Client::new(),
             )),
@@ -96,15 +105,7 @@ async fn async_main(settings: BaseSettings) -> WebserverResult<()> {
         .init();
 
     // app state
-    let mut app_state: AppState = AppState::new(&settings)?;
-
-    // sitemaps
-    generate_sitemaps(&settings, &app_state)?;
-
-    // generate CacheBuster
-    app_state.cache_buster.gen_cache();
-    info!("{}", app_state.cache_buster);
-    app_state.cache_buster.print_to_file("..");
+    let app_state: AppState = AppState::new(&settings)?;
 
     // API routes
     let v1_api_routes: Router<Arc<AppState>> = Router::new()
@@ -123,11 +124,24 @@ async fn async_main(settings: BaseSettings) -> WebserverResult<()> {
         )
         .nest_service(
             "/favicon.ico",
-            ServeFile::new("static/image/favicon/favicon.ico"),
+            ServeFile::new(
+                app_state
+                    .cache_buster
+                    .get_file("static/image/favicon/favicon.ico"),
+            ),
         )
-        .nest_service("/robots.txt", ServeFile::new("static/file/robots.txt"))
-        .nest_service("/sitemap.xml", ServeFile::new("static/file/sitemap.xml"))
-        .nest_service("/humans.txt", ServeFile::new("static/file/humans.txt"))
+        .nest_service(
+            "/robots.txt",
+            ServeFile::new(app_state.cache_buster.get_file("static/file/robots.txt")),
+        )
+        .nest_service(
+            "/sitemap.xml",
+            ServeFile::new(app_state.cache_buster.get_file("static/file/sitemap.xml")),
+        )
+        .nest_service(
+            "/humans.txt",
+            ServeFile::new(app_state.cache_buster.get_file("static/file/humans.txt")),
+        )
         .fallback(fallback)
         .with_state(Arc::new(app_state))
         .layer(
@@ -177,8 +191,8 @@ async fn home(State(state): State<Arc<AppState>>) -> Html<String> {
                 &state.template_data.clone().render(Page::new(
                     String::from("Home"),
                     String::from("/"),
-                    vec![String::from("/static/stylesheet/main.css")],
-                    vec![String::from("/static/script/scitylana.js")],
+                    vec![String::from("static/stylesheet/main.css")],
+                    vec![String::from("static/script/scitylana.js")],
                 )),
             )
             .unwrap(),
@@ -195,8 +209,8 @@ async fn four_oh_four(State(state): State<Arc<AppState>>) -> Html<String> {
                 &state.template_data.clone().render(Page::new(
                     String::from("404"),
                     String::from("/404"),
-                    vec![String::from("/static/stylesheet/main.css")],
-                    vec![String::from("/static/script/scitylana.js")],
+                    vec![String::from("static/stylesheet/main.css")],
+                    vec![String::from("static/script/scitylana.js")],
                 )),
             )
             .unwrap(),
@@ -226,19 +240,9 @@ async fn analytics(
 }
 
 #[instrument(skip_all)]
-fn generate_sitemaps(settings: &BaseSettings, app_state: &AppState) -> WebserverResult<()> {
+fn generate_sitemaps(settings: &BaseSettings) -> WebserverResult<()> {
     // track all the base routes (e.g. "/blog", "/projects", etc.)
-    let mut base_routes: Vec<&str> = Vec::new();
-    base_routes.push("/"); // home page
-    base_routes.extend(
-        app_state
-            .template_data
-            .header
-            .nav_links
-            .iter()
-            .map(|link| link.url.as_str())
-            .collect::<Vec<&str>>(),
-    );
+    let base_routes: Vec<&str> = vec!["/"];
 
     // generate <url> for all routes
     let mut urls: Vec<Url> = Vec::new();

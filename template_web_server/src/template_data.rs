@@ -1,24 +1,24 @@
+use std::{collections::HashMap, fmt::Display};
+
 use serde::{Deserialize, Serialize};
 use webserver_base::{
-    BaseSettings, Copyright, Footer, Header, Metadata, Page, SocialMedia, Twitter,
+    BaseSettings, CacheBuster, Copyright, Footer, Metadata, Page, SocialMedia, Twitter,
 };
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TemplateData {
     metadata: Metadata,
-    pub header: Header,
     footer: Footer,
     pub page: Option<Page>,
 
     social_media: Vec<SocialMedia>,
 
-    analytics_domain: String,
-    uptime_domain: String,
+    cache_buster: HashMap<String, String>,
 }
 
 impl TemplateData {
     #[must_use]
-    pub fn new(settings: BaseSettings) -> Self {
+    pub fn new(settings: BaseSettings, cache_buster: &CacheBuster) -> Self {
         let social_media: Vec<SocialMedia> = vec![
             SocialMedia::new("Twitter", "https://twitter.com/goddtriffin"),
             SocialMedia::new("Instagram", "https://www.instagram.com/goddtriffin/"),
@@ -53,14 +53,15 @@ impl TemplateData {
                 settings.home_url,
                 keywords,
                 String::from("#f7cb64"),
-                String::from("/static/image/social/todo.webp"),
+                format!(
+                    "/{}",
+                    cache_buster.get_file("static/image/social/todo.webp")
+                ),
             ),
-            header: Header::new(vec![]),
             footer: Footer::new(Copyright::new(String::from("1998"))),
             page: None,
             social_media,
-            analytics_domain: settings.analytics_domain,
-            uptime_domain: settings.uptime_domain,
+            cache_buster: cache_buster.get_cache(),
         }
     }
 
@@ -68,5 +69,11 @@ impl TemplateData {
     pub fn render(mut self, page: Page) -> Self {
         self.page = Some(page);
         self
+    }
+}
+
+impl Display for TemplateData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", serde_json::to_string_pretty(self).unwrap())
     }
 }

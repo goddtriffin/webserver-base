@@ -92,7 +92,7 @@ xml-builder = "0.5.3"
 chrono = { version = "0.4.38", features = ["default", "serde"] }
 
 # markdown
-handlebars = "6.1.0"
+handlebars = "6.3.0"
 pulldown-cmark = "0.12.1"
 
 # random

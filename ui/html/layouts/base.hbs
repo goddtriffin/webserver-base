@@ -1,20 +1,22 @@
 <!DOCTYPE html>
 <html lang="{{metadata.language_code}}-{{metadata.country_code}}">
-    <head>
-        {{> metadata}}
-        {{> favicon}}
 
-        {{#each page.style_sheets}}
-        <link rel="stylesheet" type="text/css" href="{{this}}">
-        {{/each}}
-    </head>
-    <body class="color-background">
-        {{> header}}
-        {{> main}}
-        {{> footer}}
+<head>
+  {{> metadata}}
+  {{> favicon}}
 
-        {{#each page.scripts}}
-        <script type="module" src="{{this}}"></script>
-        {{/each}}
-    </body>
+  {{#each page.style_sheets}}
+  <link rel="stylesheet" type="text/css" href="/{{lookup ../cache_buster this}}">
+  {{/each}}
+</head>
+
+<body class="color-background">
+  {{> main}}
+  {{> footer}}
+
+  {{#each page.scripts}}
+  <script type="module" src="/{{lookup ../cache_buster this}}"></script>
+  {{/each}}
+</body>
+
 </html>

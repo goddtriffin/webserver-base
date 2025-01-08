@@ -31,9 +31,23 @@ impl CacheBuster {
     /// and returns the version of the filepath that contains a unique hash.
     ///
     /// e.g. "/static/image/favicon/favicon.ico" -> "/static/image/favicon/favicon.66189abc248d80832e458ee37e93c9e8.ico"
+    ///
+    /// # Panics
+    ///
+    /// Panics if the file is not found in the cache.
     #[must_use]
-    pub fn get(&self, original_asset_file_path: &str) -> Option<String> {
-        self.cache.get(original_asset_file_path).cloned()
+    pub fn get_file(&self, original_asset_file_path: &str) -> String {
+        self.cache
+            .get(original_asset_file_path)
+            .cloned()
+            .unwrap_or_else(|| {
+                panic!("CacheBuster: File not found in cache: {original_asset_file_path:?}")
+            })
+    }
+
+    #[must_use]
+    pub fn get_cache(&self) -> HashMap<String, String> {
+        self.cache.clone()
     }
 
     /// # Panics
@@ -100,10 +114,7 @@ fn gen_cache(root: &Path) -> HashMap<String, String> {
                     panic!("Failed to rename file: {original_file_path:?} -> {new_file_path:?}")
                 });
 
-                cache.insert(
-                    format!("/{original_file_path}"),
-                    format!("/{new_file_path}"),
-                );
+                cache.insert(original_file_path, new_file_path);
             }
         }
     }

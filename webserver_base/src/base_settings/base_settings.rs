@@ -14,7 +14,6 @@ pub struct BaseSettings {
 
     pub analytics_domain: String,
     pub sentry_dsn: String,
-    pub uptime_domain: String,
 }
 
 impl Default for BaseSettings {
@@ -67,11 +66,6 @@ impl Default for BaseSettings {
             panic!("environment variable `SENTRY_DSN` is not set");
         };
 
-        // uptime domain
-        let Ok(uptime_domain) = env::var("UPTIME_DOMAIN") else {
-            panic!("environment_variable `UPTIME_DOMAIN` is not set");
-        };
-
         // all settings
         Self {
             host,
@@ -85,7 +79,6 @@ impl Default for BaseSettings {
 
             analytics_domain,
             sentry_dsn,
-            uptime_domain,
         }
     }
 }
