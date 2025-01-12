@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Display};
+use std::{collections::BTreeMap, fmt::Display};
 
 use serde::{Deserialize, Serialize};
 use webserver_base::{
@@ -13,7 +13,7 @@ pub struct TemplateData {
 
     social_media: Vec<SocialMedia>,
 
-    cache_buster: HashMap<String, String>,
+    cache_buster: BTreeMap<String, String>,
 }
 
 impl TemplateData {

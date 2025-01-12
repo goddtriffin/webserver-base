@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::BTreeMap,
     fmt::{self, Display},
     fs::{self, File},
     io::Read,
@@ -11,7 +11,7 @@ use std::{fs::DirEntry, path::PathBuf};
 pub struct CacheBuster {
     asset_directory: String,
 
-    cache: HashMap<String, String>,
+    cache: BTreeMap<String, String>,
 }
 
 impl CacheBuster {
@@ -19,7 +19,7 @@ impl CacheBuster {
     pub fn new(asset_directory: &str) -> Self {
         Self {
             asset_directory: asset_directory.to_string(),
-            cache: HashMap::new(),
+            cache: BTreeMap::new(),
         }
     }
 
@@ -46,7 +46,7 @@ impl CacheBuster {
     }
 
     #[must_use]
-    pub fn get_cache(&self) -> HashMap<String, String> {
+    pub fn get_cache(&self) -> BTreeMap<String, String> {
         self.cache.clone()
     }
 
@@ -81,8 +81,8 @@ impl Display for CacheBuster {
     }
 }
 
-fn gen_cache(root: &Path) -> HashMap<String, String> {
-    let mut cache: HashMap<String, String> = HashMap::new();
+fn gen_cache(root: &Path) -> BTreeMap<String, String> {
+    let mut cache: BTreeMap<String, String> = BTreeMap::new();
 
     let mut dirs_to_visit: VecDeque<PathBuf> = VecDeque::new();
     dirs_to_visit.push_back(root.to_path_buf());
