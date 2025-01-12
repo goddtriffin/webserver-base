@@ -16,7 +16,6 @@ pub struct RequestPayload {
     pub screen_width: usize,
 }
 
-#[expect(clippy::module_name_repetitions)]
 pub struct AxumPlausibleAnalyticsHandler {
     plausible_client: Plausible,
 }

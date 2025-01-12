@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     fmt::{self, Display},
     fs::{self, File},
-    io::{Read, Write},
+    io::Read,
 };
 use std::{collections::VecDeque, path::Path};
 use std::{fs::DirEntry, path::PathBuf};
@@ -54,18 +54,12 @@ impl CacheBuster {
     ///
     /// Panics if the file cannot be created or written to.
     pub fn print_to_file(&self, output_dir: &str) {
-        let output_path: PathBuf = Path::new(output_dir).join("cache-buster.txt");
-        let mut file: File = File::create(&output_path)
+        let output_path: PathBuf = Path::new(output_dir).join("cache-buster.json");
+        let file: File = File::create(&output_path)
             .unwrap_or_else(|_| panic!("Failed to create file: {output_path:?}"));
 
-        // sort hash file paths alphabetically
-        let mut hashed_paths: Vec<&String> = self.cache.values().collect();
-        hashed_paths.sort();
-
-        for path in hashed_paths {
-            writeln!(file, "{path}")
-                .unwrap_or_else(|_| panic!("Failed to write to file: {output_path:?}"));
-        }
+        serde_json::to_writer_pretty(file, &self.cache)
+            .unwrap_or_else(|_| panic!("Failed to write JSON to file: {output_path:?}"));
     }
 }
 

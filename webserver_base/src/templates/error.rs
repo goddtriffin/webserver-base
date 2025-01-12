@@ -2,7 +2,6 @@ use handlebars::{RenderError, TemplateError};
 use std::fmt::{Debug, Formatter};
 use std::{error, fmt, io};
 
-#[expect(clippy::module_name_repetitions)]
 #[derive(Debug)]
 pub enum TemplateRegistryError {
     FileIOError(io::Error),

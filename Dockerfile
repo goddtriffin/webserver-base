@@ -2,7 +2,7 @@
 # Binary #
 ##########
 
-FROM rust:1.83.0-alpine3.21 AS binary_builder
+FROM rust:1.84.0-alpine3.21 AS binary_builder
 
 # update alpine linux dependencies
 RUN apk update
@@ -24,7 +24,7 @@ RUN cargo build --release --package template-web-server --bin template-web-serve
 # Javascript #
 ##############
 
-FROM denoland/deno:alpine-2.1.1 AS js_builder
+FROM denoland/deno:alpine-2.1.5 AS js_builder
 
 # update alpine linux dependencies
 RUN apk update
