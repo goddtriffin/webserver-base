@@ -52,6 +52,7 @@ impl AppState {
         // generate CacheBuster (must occur after sitemap generation)
         let mut cache_buster: CacheBuster = CacheBuster::new("static");
         cache_buster.gen_cache();
+        cache_buster.update_source_map_references();
         info!("{}", cache_buster);
         cache_buster.print_to_file("..");
 

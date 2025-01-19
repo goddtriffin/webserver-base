@@ -7,6 +7,8 @@ use std::{
 use std::{collections::VecDeque, path::Path};
 use std::{fs::DirEntry, path::PathBuf};
 
+use regex::Regex;
+
 #[derive(Debug, Clone)]
 pub struct CacheBuster {
     asset_directory: String,
@@ -60,6 +62,57 @@ impl CacheBuster {
 
         serde_json::to_writer_pretty(file, &self.cache)
             .unwrap_or_else(|_| panic!("Failed to write JSON to file: {output_path:?}"));
+    }
+
+    /// Updates the sourceMappingURL comment in `.js` files to point to the hashed `.js.map` file.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the file cannot be read or parsed.
+    pub fn update_source_map_references(&self) {
+        let source_map_regex: Regex = Regex::new(r"//# sourceMappingURL=(.+\.js\.map)")
+            .unwrap_or_else(|_| panic!("Failed to compile sourceMappingURL regex"));
+
+        for (original_path, hashed_path) in &self.cache {
+            // only process `.js` files
+            if !std::path::Path::new(original_path)
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("js"))
+            {
+                continue;
+            }
+
+            // check for corresponding `.map` file
+            let original_map_path: String = format!("{original_path}.map");
+            let hashed_map_path: &String = match self.cache.get(&original_map_path) {
+                Some(path) => path,
+                None => continue,
+            };
+
+            // read `.map` file content
+            let mut content: String = fs::read_to_string(hashed_path)
+                .unwrap_or_else(|_| panic!("Failed to read file: {hashed_path}"));
+
+            // get just the `.map` filename
+            let hashed_map_filename: &str = Path::new(hashed_map_path)
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or_else(|| panic!("Invalid hashed map path"));
+
+            // replace the `sourceMappingURL` comment
+            if source_map_regex.is_match(&content) {
+                content = source_map_regex
+                    .replace(
+                        &content,
+                        format!("//# sourceMappingURL={hashed_map_filename}"),
+                    )
+                    .into_owned();
+
+                // Write the updated content back to the file
+                fs::write(hashed_path, content)
+                    .unwrap_or_else(|_| panic!("Failed to write file: {hashed_path}"));
+            }
+        }
     }
 }
 

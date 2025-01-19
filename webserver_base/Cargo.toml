@@ -36,6 +36,9 @@ md5.workspace = true
 # templating
 handlebars.workspace = true
 
+# regex
+regex.workspace = true
+
 # http request
 reqwest.workspace = true
 
