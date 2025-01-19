@@ -2,7 +2,12 @@ use std::{collections::BTreeMap, fmt::Display};
 
 use serde::{Deserialize, Serialize};
 use webserver_base::{
-    BaseSettings, CacheBuster, Copyright, Footer, Metadata, Page, SocialMedia, Twitter,
+    base_settings::BaseSettings,
+    cache_buster::CacheBuster,
+    templates::schema::{
+        copyright::Copyright, footer::Footer, metadata::Metadata, page::Page,
+        social_media::SocialMedia, twitter::Twitter,
+    },
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

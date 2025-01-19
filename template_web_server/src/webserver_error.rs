@@ -2,7 +2,7 @@ use sitemap_rs::url_error::UrlError;
 use sitemap_rs::url_set_error::UrlSetError;
 use std::fmt::{Debug, Formatter};
 use std::{error, fmt};
-use webserver_base::TemplateRegistryError;
+use webserver_base::templates::error::TemplateRegistryError;
 use xml_builder::XMLError;
 
 pub type WebserverResult<T> = Result<T, WebserverError>;

@@ -1,19 +1,9 @@
-mod copyright;
-mod footer;
-mod header;
-mod image;
-mod metadata;
-mod nav_link;
-mod page;
-mod social_media;
-mod twitter;
-
-pub use copyright::*;
-pub use footer::*;
-pub use header::*;
-pub use image::*;
-pub use metadata::*;
-pub use nav_link::*;
-pub use page::*;
-pub use social_media::*;
-pub use twitter::*;
+pub mod copyright;
+pub mod footer;
+pub mod header;
+pub mod image;
+pub mod metadata;
+pub mod nav_link;
+pub mod page;
+pub mod social_media;
+pub mod twitter;

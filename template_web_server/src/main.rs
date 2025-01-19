@@ -30,8 +30,10 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 use webserver_base::{
-    AxumPlausibleAnalyticsHandler, BaseSettings, CacheBuster, Page, RequestPayload,
-    TemplateRegistry,
+    axum_plausible_analytics::{AxumPlausibleAnalyticsHandler, RequestPayload},
+    base_settings::BaseSettings,
+    cache_buster::CacheBuster,
+    templates::{schema::page::Page, template_registry::TemplateRegistry},
 };
 
 #[derive(Clone)]

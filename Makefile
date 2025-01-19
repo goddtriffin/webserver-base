@@ -21,7 +21,7 @@ help: # Prints out help
 
 .PHONY: watch_sass
 watch_sass: ## hot reloads Sass stylesheets
-	sass --watch --update --style=compressed --no-source-map --color --unicode ui/static/scss:bin/static/stylesheet
+	sass --watch --update --style=compressed --no-source-map --color --unicode static/scss:bin/static/stylesheet
 
 .PHONY: gen_js
 gen_js: # generates Javascript from Typescript
@@ -36,7 +36,7 @@ gen_js: # generates Javascript from Typescript
 		--allow-env \
 		--allow-net \
 		--allow-run \
-		ui/static/script/bundle.ts
+		static/script/bundle.ts
 
 .PHONY: gen_css
 gen_css: # generate CSS from SCSS
@@ -45,7 +45,7 @@ gen_css: # generate CSS from SCSS
 	mkdir -p bin/static/stylesheet
 
 	# generate CSS from SCSS
-	sass --style=compressed --no-source-map --color --unicode ui/static/scss:bin/static/stylesheet
+	sass --style=compressed --no-source-map --color --unicode static/scss:bin/static/stylesheet
 
 .PHONY: gen_static
 gen_static: # generates static resources
@@ -56,10 +56,10 @@ gen_static: # generates static resources
 	rm -rf bin/static/image/
 	mkdir -p bin/static
 
-	# copy over ui: html, files, images
-	cp -R ui/html bin/html
-	cp -R ui/static/file bin/static/file
-	cp -R ui/static/image bin/static/image
+	# copy over: html, files, images
+	cp -R html bin/html
+	cp -R static/file bin/static/file
+	cp -R static/image bin/static/image
 
 .PHONY: dev
 dev: gen_js gen_css gen_static ## runs the development binary
@@ -77,9 +77,9 @@ dev: gen_js gen_css gen_static ## runs the development binary
 .PHONY: lint
 lint: ## lints the codebase
 	cargo fmt
-	deno lint ui/static/script/
-	deno doc --lint ui/static/script/
-	deno fmt ui/static/script/
+	deno lint static/script/
+	deno doc --lint static/script/
+	deno fmt static/script/
 
 .PHONY: test
 test: ## runs tests
@@ -95,7 +95,7 @@ fix: ## fixes the codebase
 
 .PHONY: docs
 docs: ## generates local documentation
-	deno doc --html --name="webserver-base" ./ui/static/script/mod.ts
+	deno doc --html --name="webserver-base" ./static/script/mod.ts
 
 .PHONY: publish_dry_run
 publish_dry_run: ## dry run of publishing libraries to crates.io and JSR

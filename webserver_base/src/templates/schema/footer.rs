@@ -1,5 +1,6 @@
-use crate::templates::Copyright;
 use serde::{Deserialize, Serialize};
+
+use super::copyright::Copyright;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Footer {

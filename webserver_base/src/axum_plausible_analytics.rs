@@ -1,4 +1,3 @@
-use crate::{BaseSettings, Environment};
 use axum::http::{HeaderMap, StatusCode};
 use plausible_rs::{EventHeaders, EventPayload, Plausible, PAGEVIEW_EVENT};
 use reqwest::Client;
@@ -7,6 +6,8 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tracing::{error, info, instrument, warn};
+
+use crate::base_settings::{BaseSettings, Environment};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RequestPayload {

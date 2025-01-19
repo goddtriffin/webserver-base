@@ -1,10 +1,11 @@
-use crate::TemplateRegistryError;
 use chrono::{DateTime, Utc};
 use handlebars::{handlebars_helper, Handlebars};
 use serde::Serialize;
 use std::path::PathBuf;
 use std::{env, fs};
 use tracing::instrument;
+
+use super::error::TemplateRegistryError;
 
 // comma-delimits a list of strings
 handlebars_helper!(

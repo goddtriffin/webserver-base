@@ -1,11 +1,11 @@
-import * as esbuild from "https://deno.land/x/esbuild@v0.23.0/mod.js";
-import { denoPlugins } from "jsr:@luca/esbuild-deno-loader@0.10";
+import * as esbuild from "https://deno.land/x/esbuild@v0.24.2/mod.js";
+import { denoPlugins } from "jsr:@luca/esbuild-deno-loader@0.11.1";
 
 async function collectEntryPoints(): Promise<string[]> {
   const entryPoints: string[] = [];
-  for await (const entryPoint of Deno.readDir("ui/static/script/")) {
+  for await (const entryPoint of Deno.readDir("static/script/")) {
     if (entryPoint.isFile && entryPoint.name.endsWith(".ts") && entryPoint.name !== "bundle.ts") {
-      entryPoints.push(`ui/static/script/${entryPoint.name}`);
+      entryPoints.push(`static/script/${entryPoint.name}`);
     }
   }
   return entryPoints;

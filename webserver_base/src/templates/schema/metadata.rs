@@ -1,5 +1,6 @@
-use crate::templates::Twitter;
 use serde::{Deserialize, Serialize};
+
+use super::twitter::Twitter;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Metadata {

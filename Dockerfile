@@ -34,7 +34,7 @@ WORKDIR /template-web-server
 
 # copy required files
 COPY Makefile .
-COPY ui/static/script/ ui/static/script/
+COPY static/script/ static/script/
 COPY deno.jsonc .
 
 # generate Javascript
@@ -57,7 +57,7 @@ WORKDIR /template-web-server
 
 # copy required files
 COPY Makefile .
-COPY ui/static/scss/ ui/static/scss/
+COPY static/scss/ static/scss/
 
 # generate stylesheet(s)
 RUN make gen_css
@@ -83,9 +83,9 @@ COPY --from=js_builder /template-web-server/bin/static/script/ static/script/
 COPY --from=css_builder /template-web-server/bin/static/stylesheet/ static/stylesheet/
 
 # copy non-generative static assets
-COPY ui/html/ html/
-COPY ui/static/file/ static/file/
-COPY ui/static/image/ static/image/
+COPY html/ html/
+COPY static/file/ static/file/
+COPY static/image/ static/image/
 
 # run server
 EXPOSE 8080

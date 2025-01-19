@@ -1,5 +1,6 @@
-use crate::templates::NavLink;
 use serde::{Deserialize, Serialize};
+
+use super::nav_link::NavLink;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Header {
