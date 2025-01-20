@@ -95,7 +95,7 @@ fix: ## fixes the codebase
 
 .PHONY: docs
 docs: ## generates local documentation
-	deno doc --html --name="webserver-base" ./static/script/mod.ts
+	deno doc --html --name="webserver-base" ./static/script/webserver-base/
 
 .PHONY: publish_dry_run
 publish_dry_run: ## dry run of publishing libraries to crates.io and JSR
