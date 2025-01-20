@@ -11,10 +11,6 @@
       "static/script/webserver-base/**/*.ts"
     ]
   },
-  "exclude": [
-    "bin",
-    "docs"
-  ],
   "compilerOptions": {
     "lib": [
       "dom",
