@@ -1,8 +1,11 @@
-use axum::extract::{ConnectInfo, DefaultBodyLimit, State};
 use axum::handler::HandlerWithoutStateExt;
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use axum::routing::{get, post};
+use axum::{
+    extract::{ConnectInfo, DefaultBodyLimit, State},
+    Json,
+};
 use axum::{serve, Form, Router};
 use axum_extra::routing::RouterExt;
 use chrono::{DateTime, Utc};
@@ -33,6 +36,7 @@ use webserver_base::{
     axum_plausible_analytics::{AxumPlausibleAnalyticsHandler, RequestPayload},
     base_settings::BaseSettings,
     cache_buster::CacheBuster,
+    frontend_error_logger::FrontendErrorPayload,
     templates::{schema::page::Page, template_registry::TemplateRegistry},
 };
 
@@ -114,6 +118,7 @@ async fn async_main(settings: BaseSettings) -> WebserverResult<()> {
     let v1_api_routes: Router<Arc<AppState>> = Router::new()
         .route_with_tsr("/health", get(health_check))
         .route_with_tsr("/scitylana", post(analytics))
+        .route_with_tsr("/frontend-error", post(frontend_error))
         .fallback(fallback);
 
     // build our application with a route
@@ -195,7 +200,10 @@ async fn home(State(state): State<Arc<AppState>>) -> Html<String> {
                     String::from("Home"),
                     String::from("/"),
                     vec![String::from("static/stylesheet/main.css")],
-                    vec![String::from("static/script/scitylana.js")],
+                    vec![
+                        String::from("static/script/scitylana.js"),
+                        String::from("static/script/frontend-error.js"),
+                    ],
                 )),
             )
             .unwrap(),
@@ -213,7 +221,10 @@ async fn four_oh_four(State(state): State<Arc<AppState>>) -> Html<String> {
                     String::from("404"),
                     String::from("/404"),
                     vec![String::from("static/stylesheet/main.css")],
-                    vec![String::from("static/script/scitylana.js")],
+                    vec![
+                        String::from("static/script/scitylana.js"),
+                        String::from("static/script/frontend-error.js"),
+                    ],
                 )),
             )
             .unwrap(),
@@ -240,6 +251,12 @@ async fn analytics(
     plausible_client
         .handle(headers, state.settings.clone(), addr, incoming_payload)
         .await
+}
+
+#[instrument(skip_all)]
+async fn frontend_error(Json(frontend_error_payload): Json<FrontendErrorPayload>) -> StatusCode {
+    frontend_error_payload.log();
+    StatusCode::OK
 }
 
 #[instrument(skip_all)]
