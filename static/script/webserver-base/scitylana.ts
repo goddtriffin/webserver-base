@@ -1,19 +1,7 @@
 /**
- * A Typescript library which contains shared logic for all of my webserver projects.
- * @module
- */
-
-/**
  * Publishes a highly-opinionated custom analytics event to the server.
- *
- * @example How to use:
- * ```ts
- * import { scitylana } from "@todd/webserver-base";
- *
- * document.addEventListener("DOMContentLoaded", scitylana);
- * ```
  */
-export async function scitylana(e: Event): Promise<void> {
+async function scitylana(e: Event): Promise<void> {
   e.preventDefault();
 
   const response: Response = await fetch("/api/v1/scitylana", {
@@ -31,4 +19,11 @@ export async function scitylana(e: Event): Promise<void> {
   if (!response.ok) {
     console.error("Failed scitylana: ", response);
   }
+}
+
+/**
+ * Configures the analytics event to be sent on page load.
+ */
+export function initScitylana(): void {
+  document.addEventListener("DOMContentLoaded", scitylana);
 }

@@ -1,26 +1,19 @@
 {
   "name": "@todd/webserver-base",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "exports": {
-    ".": "./static/script/mod.ts"
+    "./bundle": "./static/script/webserver-base/bundle.ts",
+    "./frontend-error": "./static/script/webserver-base/frontend-error.ts",
+    "./scitylana": "./static/script/webserver-base/scitylana.ts"
+  },
+  "publish": {
+    "include": [
+      "static/script/webserver-base/**/*.ts"
+    ]
   },
   "exclude": [
-    ".github",
-    ".idea",
-    ".vscode",
     "bin",
-    "docs",
-    "target",
-    "template_web_server",
-    "html",
-    "static/file",
-    "static/image",
-    "static/scss",
-    "webserver_base",
-    ".clippy.toml",
-    "Cargo*",
-    "Dockerfile",
-    "Makefile"
+    "docs"
   ],
   "compilerOptions": {
     "lib": [
