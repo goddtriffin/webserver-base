@@ -1,14 +1,18 @@
 {
   "name": "@todd/webserver-base",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "exports": {
+    ".": "./static/script/webserver-base/mod.ts",
     "./bundle": "./static/script/webserver-base/bundle.ts",
     "./frontend-error": "./static/script/webserver-base/frontend-error.ts",
     "./scitylana": "./static/script/webserver-base/scitylana.ts"
   },
   "publish": {
     "include": [
-      "static/script/webserver-base/**/*.ts"
+      "static/script/webserver-base/**/*.ts",
+      "deno.*",
+      "LICENSE",
+      "README.md"
     ]
   },
   "compilerOptions": {

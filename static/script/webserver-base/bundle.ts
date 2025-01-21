@@ -1,3 +1,8 @@
+/**
+ * This script bundles all TypeScript files in the static/script/ directory.
+ * @module
+ */
+
 import * as esbuild from "npm:esbuild@0.24.2";
 import { denoPlugins } from "jsr:@luca/esbuild-deno-loader@0.11.1";
 
@@ -14,30 +19,25 @@ async function collectEntryPoints(): Promise<string[]> {
   return entryPoints;
 }
 
-/**
- * Transpiles and bundles all entry points in the static/script/ directory.
- */
-export function bundle(): void {
-  collectEntryPoints().then((entryPoints: string[]) => {
-    esbuild.build({
-      plugins: [...denoPlugins()],
-      entryPoints: entryPoints,
-      outdir: "bin/static/script/",
-      bundle: true,
-      platform: "browser",
-      format: "esm",
-      target: "esnext",
-      minify: true,
-      sourcemap: true,
-      treeShaking: true,
-    }).then(() => {
-      Deno.exit(0);
-    }).catch(() => {
-      console.error("Failed to bundle files!");
-      Deno.exit(1);
-    });
+collectEntryPoints().then((entryPoints: string[]) => {
+  esbuild.build({
+    plugins: [...denoPlugins()],
+    entryPoints: entryPoints,
+    outdir: "bin/static/script/",
+    bundle: true,
+    platform: "browser",
+    format: "esm",
+    target: "esnext",
+    minify: true,
+    sourcemap: true,
+    treeShaking: true,
+  }).then(() => {
+    Deno.exit(0);
   }).catch(() => {
-    console.error("Failed to collect entry points!");
+    console.error("Failed to bundle files!");
     Deno.exit(1);
   });
-}
+}).catch(() => {
+  console.error("Failed to collect entry points!");
+  Deno.exit(1);
+});

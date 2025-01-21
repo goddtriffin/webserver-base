@@ -1,4 +1,9 @@
 /**
+ * This module provides functions to report frontend errors to the server.
+ * @module
+ */
+
+/**
  * The payload of a frontend error report.
  */
 type FrontendErrorPayload = {

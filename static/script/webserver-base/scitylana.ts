@@ -1,4 +1,9 @@
 /**
+ * This module provides functions to publish custom analytics events to the server.
+ * @module
+ */
+
+/**
  * Publishes a highly-opinionated custom analytics event to the server.
  */
 async function scitylana(e: Event): Promise<void> {

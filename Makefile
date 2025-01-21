@@ -36,7 +36,7 @@ gen_js: # generates Javascript from Typescript
 		--allow-env \
 		--allow-net \
 		--allow-run \
-		static/script/bundle.ts
+		static/script/webserver-base/bundle.ts
 
 .PHONY: gen_css
 gen_css: # generate CSS from SCSS
