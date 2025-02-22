@@ -2,18 +2,18 @@ use axum::handler::HandlerWithoutStateExt;
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use axum::routing::{get, post};
+use axum::{Form, Router, serve};
 use axum::{
-    extract::{ConnectInfo, DefaultBodyLimit, State},
     Json,
+    extract::{ConnectInfo, DefaultBodyLimit, State},
 };
-use axum::{serve, Form, Router};
 use axum_extra::routing::RouterExt;
 use chrono::{DateTime, Utc};
 use reqwest::Client;
-use sentry::integrations::tower::NewSentryLayer;
 use sentry::ClientInitGuard;
+use sentry::integrations::tower::NewSentryLayer;
 use sitemap_rs::image::Image;
-use sitemap_rs::url::{ChangeFrequency, Url, DEFAULT_PRIORITY};
+use sitemap_rs::url::{ChangeFrequency, DEFAULT_PRIORITY, Url};
 use sitemap_rs::url_builder::UrlBuilder;
 use sitemap_rs::url_set::UrlSet;
 use std::fs::File;
@@ -25,13 +25,13 @@ use template_web_server::template_data::TemplateData;
 use template_web_server::webserver_error::WebserverResult;
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
+use tower_http::LatencyUnit;
 use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
-use tower_http::LatencyUnit;
-use tracing::{info, instrument, Level};
+use tracing::{Level, info, instrument};
+use tracing_subscriber::EnvFilter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::EnvFilter;
 use webserver_base::{
     axum_plausible_analytics::{AxumPlausibleAnalyticsHandler, RequestPayload},
     base_settings::BaseSettings,

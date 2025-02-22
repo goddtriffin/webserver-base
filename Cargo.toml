@@ -3,9 +3,9 @@ members = ["webserver_base", "template_web_server"]
 resolver = "2"
 
 [workspace.package]
-version = "0.1.16"
-edition = "2021"
-rust-version = "1.84"
+version = "0.1.17"
+edition = "2024"
+rust-version = "1.85"
 authors = ["Todd Everett Griffin <tgriffin115@gmail.com>"]
 readme = "README.md"
 repository = "https://github.com/goddtriffin/webserver-base"
@@ -35,40 +35,40 @@ cargo = { level = "deny", priority = -1 }
 
 [workspace.dependencies]
 # tokio
-tokio = { version = "1.40.0", features = ["full", "tracing"] }
+tokio = { version = "1.43.0", features = ["full", "tracing"] }
 
 # futures
-futures = "0.3.30"
-futures-util = { version = "0.3.30", default-features = false, features = [
+futures = "0.3.31"
+futures-util = { version = "0.3.31", default-features = false, features = [
   "sink",
   "std",
 ] }
 
 # axum
-axum = { version = "0.7.6", features = [
+axum = { version = "0.7.9", features = [
   "ws",
   "multipart",
   "tracing",
   "macros",
   "tokio",
 ] }
-axum-extra = "0.9.4"
-tower = { version = "0.5.1", features = ["full"] }
-tower-http = { version = "0.6.1", features = ["full"] }
+axum-extra = "0.9.6"
+tower = { version = "0.5.2", features = ["full"] }
+tower-http = { version = "0.6.2", features = ["full"] }
 
 # http request
-reqwest = { version = "0.12.7", default-features = false, features = [
+reqwest = { version = "0.12.12", default-features = false, features = [
   "json",
   "rustls-tls",
 ] }
 
 # tracing
-tracing = "0.1.40"
-tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 
 # serde
-serde = { version = "1.0.210", features = ["derive"] }
-serde_json = "1.0.128"
+serde = { version = "1.0.218", features = ["derive"] }
+serde_json = "1.0.139"
 serde_yaml = "0.9.34+deprecated"
 
 # error monitoring
@@ -88,12 +88,12 @@ md5 = "0.7.0"
 
 # sitemap
 sitemap-rs = "0.2.2"
-xml-builder = "0.5.3"
-chrono = { version = "0.4.38", features = ["default", "serde"] }
+xml-builder = "0.5.4"
+chrono = { version = "0.4.39", features = ["default", "serde"] }
 
 # markdown
-handlebars = "6.3.0"
-pulldown-cmark = "0.12.1"
+handlebars = "6.3.1"
+pulldown-cmark = "0.12.2"
 
 # regex
 regex = "1.11.1"
@@ -102,4 +102,4 @@ regex = "1.11.1"
 rand = "0.8.5"
 
 # my homebrew libraries
-plausible-rs = "0.1.4"
+plausible-rs = "0.1.5"

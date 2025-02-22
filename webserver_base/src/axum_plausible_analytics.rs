@@ -1,5 +1,5 @@
 use axum::http::{HeaderMap, StatusCode};
-use plausible_rs::{EventHeaders, EventPayload, Plausible, PAGEVIEW_EVENT};
+use plausible_rs::{EventHeaders, EventPayload, PAGEVIEW_EVENT, Plausible};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

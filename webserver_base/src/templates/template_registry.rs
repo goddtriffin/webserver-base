@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use handlebars::{handlebars_helper, Handlebars};
+use handlebars::{Handlebars, handlebars_helper};
 use serde::Serialize;
 use std::path::PathBuf;
 use std::{env, fs};
