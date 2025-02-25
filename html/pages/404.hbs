@@ -1,6 +1,11 @@
 {{#*inline "main"}}
 <main class="page-404">
+  <a href="/">
+    <h2>Project: {{metadata.project}}</h2>
+  </a>
+
   <h1>404</h1>
+
   <picture>
     <img src="/{{lookup cache_buster 'static/image/page/404/stay-on-marked-trail.webp'}}"
       alt="404 - Stay on Marked Trail">

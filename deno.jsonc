@@ -23,15 +23,7 @@
       "deno.ns"
     ]
   },
-  "lint": {
-    "include": [
-      "static/script/"
-    ]
-  },
   "fmt": {
-    "include": [
-      "static/script/"
-    ],
     "lineWidth": 120
   }
 }

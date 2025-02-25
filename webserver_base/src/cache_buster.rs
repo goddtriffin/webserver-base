@@ -8,6 +8,7 @@ use std::{collections::VecDeque, path::Path};
 use std::{fs::DirEntry, path::PathBuf};
 
 use regex::Regex;
+use tracing::{error, instrument, warn};
 
 #[derive(Debug, Clone)]
 pub struct CacheBuster {
@@ -18,6 +19,7 @@ pub struct CacheBuster {
 
 impl CacheBuster {
     #[must_use]
+    #[instrument(skip_all)]
     pub fn new(asset_directory: &str) -> Self {
         Self {
             asset_directory: asset_directory.to_string(),
@@ -25,6 +27,7 @@ impl CacheBuster {
         }
     }
 
+    #[instrument(skip_all)]
     pub fn gen_cache(&mut self) {
         self.cache = gen_cache(Path::new(&self.asset_directory));
     }
@@ -38,16 +41,29 @@ impl CacheBuster {
     ///
     /// Panics if the file is not found in the cache.
     #[must_use]
+    #[instrument(skip_all)]
     pub fn get_file(&self, original_asset_file_path: &str) -> String {
+        // return the original path if the path does not start with the asset directory
+        if !original_asset_file_path.starts_with(&self.asset_directory) {
+            warn!(
+                "CacheBuster: File path does not start with asset directory: '{original_asset_file_path:?}'. Returning original path: '{original_asset_file_path:?}'."
+            );
+            return original_asset_file_path.to_string();
+        }
+
         self.cache
             .get(original_asset_file_path)
             .cloned()
             .unwrap_or_else(|| {
-                panic!("CacheBuster: File not found in cache: {original_asset_file_path:?}")
+                error!(
+                    "CacheBuster: File not found in cache: '{original_asset_file_path:?}'. Returning original path."
+                );
+                original_asset_file_path.to_string()
             })
     }
 
     #[must_use]
+    #[instrument(skip_all)]
     pub fn get_cache(&self) -> BTreeMap<String, String> {
         self.cache.clone()
     }
@@ -55,6 +71,7 @@ impl CacheBuster {
     /// # Panics
     ///
     /// Panics if the file cannot be created or written to.
+    #[instrument(skip_all)]
     pub fn print_to_file(&self, output_dir: &str) {
         let output_path: PathBuf = Path::new(output_dir).join("cache-buster.json");
         let file: File = File::create(&output_path)
@@ -69,6 +86,7 @@ impl CacheBuster {
     /// # Panics
     ///
     /// Panics if the file cannot be read or parsed.
+    #[instrument(skip_all)]
     pub fn update_source_map_references(&self) {
         let source_map_regex: Regex = Regex::new(r"//# sourceMappingURL=(.+\.js\.map)")
             .unwrap_or_else(|_| panic!("Failed to compile sourceMappingURL regex"));
@@ -117,6 +135,7 @@ impl CacheBuster {
 }
 
 impl Display for CacheBuster {
+    #[instrument(skip_all)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // sort alphabetically by key
         let mut keys: Vec<&String> = self.cache.keys().collect();
@@ -134,6 +153,7 @@ impl Display for CacheBuster {
     }
 }
 
+#[instrument(skip_all)]
 fn gen_cache(root: &Path) -> BTreeMap<String, String> {
     let mut cache: BTreeMap<String, String> = BTreeMap::new();
 
@@ -169,6 +189,7 @@ fn gen_cache(root: &Path) -> BTreeMap<String, String> {
     cache
 }
 
+#[instrument(skip_all)]
 fn generate_cache_busted_path(file_path: &Path, root: &Path) -> PathBuf {
     // read the file contents
     let mut file: File = File::open(file_path)

@@ -4,6 +4,14 @@
 .page-404 {
   text-align: center;
 
+  > a {
+    text-decoration: none;
+
+    > h2 {
+      margin-bottom: 1rem;
+    }
+  }
+
   >picture {
     >img {
       border-radius: variables.$border-radius;

@@ -23,6 +23,7 @@ pub struct AxumPlausibleAnalyticsHandler {
 
 impl AxumPlausibleAnalyticsHandler {
     #[must_use]
+    #[instrument(skip_all)]
     pub fn new_with_client(http_client: Client) -> Self {
         Self {
             plausible_client: Plausible::new_with_client(http_client),
