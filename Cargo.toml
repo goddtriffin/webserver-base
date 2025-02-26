@@ -3,7 +3,7 @@ members = ["webserver_base", "template_web_server"]
 resolver = "2"
 
 [workspace.package]
-version = "0.1.18"
+version = "0.1.19"
 edition = "2024"
 rust-version = "1.85"
 authors = ["Todd Everett Griffin <tgriffin115@gmail.com>"]

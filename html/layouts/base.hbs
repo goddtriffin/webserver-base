@@ -6,7 +6,11 @@
   {{> favicon}}
 
   {{#each page.style_sheets}}
+  {{#if (has_key ../cache_buster this)}}
   <link rel="stylesheet" type="text/css" href="/{{lookup ../cache_buster this}}">
+  {{else}}
+  <link rel="stylesheet" type="text/css" href="{{this}}">
+  {{/if}}
   {{/each}}
 </head>
 
@@ -15,7 +19,11 @@
   {{> footer}}
 
   {{#each page.scripts}}
+  {{#if (has_key ../cache_buster this)}}
   <script type="module" src="/{{lookup ../cache_buster this}}"></script>
+  {{else}}
+  <script type="module" src="{{this}}"></script>
+  {{/if}}
   {{/each}}
 </body>
 

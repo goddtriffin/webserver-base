@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use handlebars::{Handlebars, handlebars_helper};
 use serde::Serialize;
+use serde_json::Value;
 use std::path::PathBuf;
 use std::{env, fs};
 use tracing::instrument;
@@ -16,6 +17,12 @@ handlebars_helper!(
 handlebars_helper!(
     pretty_date: |date: DateTime<Utc>| date.format("%B %e, %Y").to_string()
 );
+
+// returns true if the object has the key
+handlebars_helper!(has_key: |obj: Value, key: str| {
+    obj.as_object()
+        .is_some_and(|o| o.contains_key(key))
+});
 
 #[derive(Clone)]
 pub struct TemplateRegistry<'a> {
@@ -34,6 +41,7 @@ impl TemplateRegistry<'_> {
         // register all helpers
         handlebars.register_helper("join", Box::new(join));
         handlebars.register_helper("pretty_date", Box::new(pretty_date));
+        handlebars.register_helper("has_key", Box::new(has_key));
 
         // enforce strict templates
         handlebars.set_strict_mode(true);
