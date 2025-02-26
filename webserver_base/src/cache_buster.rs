@@ -7,7 +7,22 @@ use std::{
 use std::{collections::VecDeque, path::Path};
 use std::{fs::DirEntry, path::PathBuf};
 
+use axum::{
+    body::Body,
+    extract::Request,
+    http::{HeaderMap, HeaderValue},
+    middleware::Next,
+    response::Response,
+};
+use chrono::{DateTime, Duration, TimeDelta, Utc};
 use regex::Regex;
+use reqwest::{
+    StatusCode,
+    header::{
+        CACHE_CONTROL, ETAG, EXPIRES, IF_MATCH, IF_MODIFIED_SINCE, IF_NONE_MATCH, IF_RANGE,
+        IF_UNMODIFIED_SINCE, PRAGMA,
+    },
+};
 use tracing::{error, instrument, warn};
 
 #[derive(Debug, Clone)]
@@ -132,6 +147,60 @@ impl CacheBuster {
             }
         }
     }
+
+    /// Middleware to set never-cache headers for all responses.
+    #[instrument(skip_all)]
+    pub async fn never_cache_middleware(req: Request, next: Next) -> Result<Response, StatusCode> {
+        let mut response: Response<Body> = next.run(req).await;
+
+        // remove ETag-related headers from the request
+        remove_etag_headers(response.headers_mut());
+
+        // set never-cache headers
+        response.headers_mut().insert(
+            EXPIRES,
+            HeaderValue::from_static("Thu, 01 Jan 1970 00:00:00 GMT"),
+        );
+        response.headers_mut().insert(
+            CACHE_CONTROL,
+            HeaderValue::from_static("no-cache, no-store, must-revalidate, private, max-age=0"),
+        );
+        response
+            .headers_mut()
+            .insert(PRAGMA, HeaderValue::from_static("no-cache"));
+
+        Ok(response)
+    }
+
+    /// Middleware to set forever cache headers for all responses.
+    #[instrument(skip_all)]
+    pub async fn forever_cache_middleware(
+        req: Request,
+        next: Next,
+    ) -> Result<Response, StatusCode> {
+        warn!(
+            "CacheBuster: Forever-cacheing resource: '{}'",
+            req.uri().path()
+        );
+        let mut response: Response<Body> = next.run(req).await;
+
+        // remove ETag-related headers from the request
+        remove_etag_headers(response.headers_mut());
+
+        // set forever-cache headers (1 year)
+        let one_year: TimeDelta = Duration::days(365);
+        let expires: DateTime<Utc> = Utc::now() + one_year;
+        response.headers_mut().insert(
+            EXPIRES,
+            HeaderValue::from_str(&expires.to_rfc2822()).unwrap(),
+        );
+        response.headers_mut().insert(
+            CACHE_CONTROL,
+            HeaderValue::from_static("public, max-age=31536000, must-revalidate, immutable"),
+        );
+
+        Ok(response)
+    }
 }
 
 impl Display for CacheBuster {
@@ -220,4 +289,14 @@ fn generate_cache_busted_path(file_path: &Path, root: &Path) -> PathBuf {
 
     // Combine with parent path and root
     root.join(parent).join(new_filename)
+}
+
+#[instrument(skip_all)]
+fn remove_etag_headers(headers: &mut HeaderMap) {
+    headers.remove(ETAG);
+    headers.remove(IF_MODIFIED_SINCE);
+    headers.remove(IF_MATCH);
+    headers.remove(IF_NONE_MATCH);
+    headers.remove(IF_RANGE);
+    headers.remove(IF_UNMODIFIED_SINCE);
 }

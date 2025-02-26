@@ -114,21 +114,16 @@ async fn async_main(settings: BaseSettings) -> WebserverResult<()> {
     // app state
     let app_state: AppState = AppState::new(&settings)?;
 
-    // API routes
-    let v1_api_routes: Router<Arc<AppState>> = Router::new()
-        .route_with_tsr("/health", get(health_check))
-        .route_with_tsr("/scitylana", post(analytics))
-        .route_with_tsr("/frontend-error", post(frontend_error))
-        .fallback(fallback);
-
-    // build our application with a route
-    let app: Router = Router::new()
+    let no_cache_routes: Router<Arc<AppState>> = Router::new()
         .route("/", get(home))
         .route_with_tsr("/404", get(four_oh_four))
-        .nest("/api/v1", v1_api_routes)
-        .nest_service(
-            "/static",
-            ServeDir::new("static").fallback(fallback.into_service()),
+        .nest(
+            "/api/v1",
+            Router::new()
+                .route_with_tsr("/health", get(health_check))
+                .route_with_tsr("/scitylana", post(analytics))
+                .route_with_tsr("/frontend-error", post(frontend_error))
+                .fallback(fallback),
         )
         .nest_service(
             "/favicon.ico",
@@ -150,6 +145,23 @@ async fn async_main(settings: BaseSettings) -> WebserverResult<()> {
             "/humans.txt",
             ServeFile::new(app_state.cache_buster.get_file("static/file/humans.txt")),
         )
+        .layer(axum::middleware::from_fn(
+            CacheBuster::never_cache_middleware,
+        ));
+
+    let forever_cache_routes: Router<Arc<AppState>> = Router::new()
+        .nest_service(
+            "/static",
+            ServeDir::new("static").fallback(fallback.into_service()),
+        )
+        .layer(axum::middleware::from_fn(
+            CacheBuster::forever_cache_middleware,
+        ));
+
+    // build our application with a route
+    let app: Router = Router::new()
+        .nest("", no_cache_routes)
+        .nest("", forever_cache_routes)
         .fallback(fallback)
         .with_state(Arc::new(app_state))
         .layer(
@@ -168,7 +180,6 @@ async fn async_main(settings: BaseSettings) -> WebserverResult<()> {
                                 .latency_unit(LatencyUnit::Micros),
                         ),
                 )
-                // TODO - figure out how to make SentryHttpLayer work
                 .layer(NewSentryLayer::new_from_top()),
         );
 
