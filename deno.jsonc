@@ -1,11 +1,12 @@
 {
   "name": "@todd/webserver-base",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "exports": {
     ".": "./static/script/webserver-base/mod.ts",
     "./bundle": "./static/script/webserver-base/bundle.ts",
     "./frontend-error": "./static/script/webserver-base/frontend-error.ts",
-    "./scitylana": "./static/script/webserver-base/scitylana.ts"
+    "./scitylana": "./static/script/webserver-base/scitylana.ts",
+    "./logger": "./static/script/webserver-base/logger.ts"
   },
   "publish": {
     "include": [
