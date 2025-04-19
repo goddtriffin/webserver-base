@@ -4,7 +4,6 @@
 [![Docs](https://docs.rs/webserver-base/badge.svg)](https://docs.rs/webserver-base)
 [![JSR](https://jsr.io/badges/@todd/webserver-base)](https://jsr.io/@todd/webserver-base)
 
-
 A Rust library which contains shared logic for all of my webserver projects.
 
 ## Features
@@ -17,7 +16,8 @@ A Rust library which contains shared logic for all of my webserver projects.
 
 ## Developers
 
-**Project is under active maintenance - even if there are no recent commits! Please submit an issue / bug request if the library needs updating for any reason!**
+**Project is under active maintenance - even if there are no recent commits! Please submit an issue / bug request if the
+library needs updating for any reason!**
 
 ### Commands
 
@@ -27,4 +27,4 @@ A Rust library which contains shared logic for all of my webserver projects.
 
 ## Credits
 
-Made with 🤬 and 🥲 by [Todd Everett Griffin](https://www.toddgriffin.me/).
+Made by [Todd Everett Griffin](https://www.toddgriffin.me/).
