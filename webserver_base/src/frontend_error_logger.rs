@@ -15,8 +15,14 @@ pub struct FrontendErrorPayload {
 }
 
 impl FrontendErrorPayload {
+    /// # Panics
+    ///
+    /// Panics if the `FrontendErrorPayload` cannot be serialized.
     #[instrument(skip_all)]
     pub fn log(&self) {
-        error!("{}", serde_json::to_string_pretty(self).unwrap());
+        error!(
+            "{}",
+            serde_json::to_string_pretty(self).unwrap_or_else(|_| { panic!("{self:?}") })
+        );
     }
 }

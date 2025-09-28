@@ -21,7 +21,6 @@ impl Default for BaseSettings {
     /// # Panics
     ///
     /// Will panic if env var `PORT` is not a u16.
-    #[must_use]
     fn default() -> Self {
         // env
         let environment = env::var("ENVIRONMENT").map_or(Environment::Development, |s| {

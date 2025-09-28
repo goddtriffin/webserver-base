@@ -4,8 +4,12 @@ use axum::http::HeaderMap;
 use tracing::{error, info, instrument};
 
 /// Determine the client's actual IP address (not the IP address of any Proxies).
+///
+/// # Panics
+///
+/// Panics if the client's actual IP address cannot be determined.
 #[instrument(skip_all)]
-pub fn resolve_true_client_ip_address(socket_addr: SocketAddr, header_map: HeaderMap) -> String {
+pub fn resolve_true_client_ip_address(socket_addr: SocketAddr, header_map: &HeaderMap) -> String {
     // prioritized list of HTTP headers that may contain the client's true IP address
     // (top-most entry is the most trusted)
     let prioritized_headers: Vec<&str> = vec![

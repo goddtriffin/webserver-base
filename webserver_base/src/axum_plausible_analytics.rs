@@ -56,7 +56,7 @@ impl AxumPlausibleAnalyticsHandler {
         .build();
 
         // generate headers
-        let real_client_ip: String = resolve_true_client_ip_address(addr, headers);
+        let real_client_ip: String = resolve_true_client_ip_address(addr, &headers);
         let headers: EventHeaders =
             EventHeaders::new(incoming_payload.user_agent.clone(), real_client_ip);
 

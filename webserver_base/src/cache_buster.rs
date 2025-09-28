@@ -90,10 +90,10 @@ impl CacheBuster {
     pub fn print_to_file(&self, output_dir: &str) {
         let output_path: PathBuf = Path::new(output_dir).join("cache-buster.json");
         let file: File = File::create(&output_path)
-            .unwrap_or_else(|_| panic!("Failed to create file: {output_path:?}"));
+            .unwrap_or_else(|_| panic!("Failed to create file: {}", output_path.display()));
 
         serde_json::to_writer_pretty(file, &self.cache)
-            .unwrap_or_else(|_| panic!("Failed to write JSON to file: {output_path:?}"));
+            .unwrap_or_else(|_| panic!("Failed to write JSON to file: {}", output_path.display()));
     }
 
     /// Updates the sourceMappingURL comment in `.js` files to point to the hashed `.js.map` file.
@@ -149,6 +149,10 @@ impl CacheBuster {
     }
 
     /// Middleware to set never-cache headers for all responses.
+    ///
+    /// # Errors
+    ///
+    /// Will return `Error` if the request cannot be processed.
     #[instrument(skip_all)]
     pub async fn never_cache_middleware(req: Request, next: Next) -> Result<Response, StatusCode> {
         let mut response: Response<Body> = next.run(req).await;
@@ -173,6 +177,14 @@ impl CacheBuster {
     }
 
     /// Middleware to set forever cache headers for all responses.
+    ///
+    /// # Errors
+    ///
+    /// Will return `Error` if the request cannot be processed.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the request cannot be processed.
     #[instrument(skip_all)]
     pub async fn forever_cache_middleware(
         req: Request,
@@ -230,10 +242,12 @@ fn gen_cache(root: &Path) -> BTreeMap<String, String> {
     dirs_to_visit.push_back(root.to_path_buf());
     while let Some(dir_path) = dirs_to_visit.pop_front() {
         for entry in fs::read_dir(&dir_path)
-            .unwrap_or_else(|_| panic!("Failed to read directory: {dir_path:?}"))
+            .unwrap_or_else(|_| panic!("Failed to read directory: {}", dir_path.display()))
         {
-            let error_msg: String =
-                format!("Failed to read directory entry: {dir_path:?} -> {entry:?}");
+            let error_msg: String = format!(
+                "Failed to read directory entry: {} -> {entry:?}",
+                dir_path.display(),
+            );
             let entry: DirEntry = entry.expect(&error_msg);
             let path: PathBuf = entry.path();
 
@@ -247,7 +261,7 @@ fn gen_cache(root: &Path) -> BTreeMap<String, String> {
 
                 // rename the files on disk
                 fs::rename(&original_file_path, &new_file_path).unwrap_or_else(|_| {
-                    panic!("Failed to rename file: {original_file_path:?} -> {new_file_path:?}")
+                    panic!("Failed to rename file: {original_file_path} -> {new_file_path}")
                 });
 
                 cache.insert(original_file_path, new_file_path);
@@ -261,11 +275,21 @@ fn gen_cache(root: &Path) -> BTreeMap<String, String> {
 #[instrument(skip_all)]
 fn generate_cache_busted_path(file_path: &Path, root: &Path) -> PathBuf {
     // read the file contents
-    let mut file: File = File::open(file_path)
-        .unwrap_or_else(|_| panic!("Failed to open file: {root:?} -> {file_path:?}"));
+    let mut file: File = File::open(file_path).unwrap_or_else(|_| {
+        panic!(
+            "Failed to open file: {} -> {}",
+            root.display(),
+            file_path.display()
+        )
+    });
     let mut contents: Vec<u8> = Vec::new();
-    file.read_to_end(&mut contents)
-        .unwrap_or_else(|_| panic!("Failed to read file: {root:?} -> {file_path:?}"));
+    file.read_to_end(&mut contents).unwrap_or_else(|_| {
+        panic!(
+            "Failed to read file: {} -> {}",
+            root.display(),
+            file_path.display()
+        )
+    });
 
     // generate MD5 hash
     let hash: String = format!("{:x}", md5::compute(contents));

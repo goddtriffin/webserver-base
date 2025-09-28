@@ -29,12 +29,29 @@ pub struct TemplateRegistry<'a> {
     handlebars: Handlebars<'a>,
 }
 
+impl Default for TemplateRegistry<'_> {
+    fn default() -> Self {
+        let mut html_path: PathBuf = env::current_dir().expect("failed to get current directory");
+        html_path.push("html");
+
+        let template_files: Vec<PathBuf> =
+            TemplateRegistry::find_all_template_files(&mut html_path)
+                .expect("failed to retrieve template files");
+
+        Self::new(template_files).expect("failed to create TemplateRegistry")
+    }
+}
+
 impl TemplateRegistry<'_> {
     /// # Errors
     ///
     /// Will return `Error` if it encounters any `FileIO` or Handlebars Template errors.
+    ///
+    /// # Panics
+    ///
+    /// Panics if it encounters any `FileIO` errors.
     #[instrument(skip_all)]
-    pub fn new() -> Result<Self, TemplateRegistryError> {
+    pub fn new(template_files: Vec<PathBuf>) -> Result<Self, TemplateRegistryError> {
         // initialize Handlebars
         let mut handlebars = Handlebars::new();
 
@@ -47,10 +64,6 @@ impl TemplateRegistry<'_> {
         handlebars.set_strict_mode(true);
 
         // find all HTML files at this hard-coded path
-        let mut html_path: PathBuf = env::current_dir()?;
-        html_path.push("html");
-        let template_files: Vec<PathBuf> =
-            TemplateRegistry::find_all_template_files(&mut html_path)?;
         for template_file in template_files {
             let file_name = template_file
                 .file_stem()
@@ -90,6 +103,9 @@ impl TemplateRegistry<'_> {
         Ok(files)
     }
 
+    /// # Errors
+    ///
+    /// Will return `Error` if the template cannot be rendered.
     #[instrument(skip_all)]
     pub fn render<T>(&self, name: &str, data: &T) -> Result<String, TemplateRegistryError>
     where

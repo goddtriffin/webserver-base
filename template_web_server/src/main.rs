@@ -65,7 +65,7 @@ impl AppState {
         Ok(Self {
             settings: settings.clone(),
             cache_buster: cache_buster.clone(),
-            template_registry: TemplateRegistry::new()?,
+            template_registry: TemplateRegistry::default(),
             template_data: TemplateData::new(settings.clone(), &cache_buster),
             plausible_client: Arc::new(AxumPlausibleAnalyticsHandler::new_with_client(
                 Client::new(),
