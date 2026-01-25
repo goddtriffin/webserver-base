@@ -1,15 +1,10 @@
 use std::fmt::{Display, Formatter};
 
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone, Default)]
 pub enum Environment {
+    #[default]
     Development,
     Production,
-}
-
-impl Default for Environment {
-    fn default() -> Self {
-        Self::Development
-    }
 }
 
 impl Environment {

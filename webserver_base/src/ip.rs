@@ -82,7 +82,7 @@ pub fn resolve_true_client_ip_address(socket_addr: SocketAddr, header_map: &Head
     for prioritized_header in prioritized_headers {
         if let Some(Some(header_value)) = prioritized_headers_values.get(prioritized_header) {
             info!("chose HTTP '{prioritized_header}' header for true client IP: '{header_value}'");
-            return header_value.to_string();
+            return header_value.clone();
         }
     }
 
@@ -93,5 +93,5 @@ pub fn resolve_true_client_ip_address(socket_addr: SocketAddr, header_map: &Head
         .unwrap()
         .as_ref()
         .unwrap()
-        .to_string()
+        .clone()
 }
