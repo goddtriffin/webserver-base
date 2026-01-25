@@ -76,13 +76,17 @@ dev: gen_js gen_css gen_static ## runs the development binary
 
 .PHONY: lint
 lint: ## lints the codebase
-	cargo fmt
 	deno lint static/script/
 	deno doc --lint static/script/
 	deno fmt static/script/
 
+	cargo fmt
+
 .PHONY: test
 test: ## runs tests
+	deno check static/script/
+	deno test
+
 	cargo fmt --check
 	cargo check
 	cargo clippy --tests
@@ -102,8 +106,10 @@ publish_dry_run: ## dry run of publishing libraries to crates.io and JSR
 	echo "\033[1;35m[Packaging Rust]\033[0m"
 	cargo publish --package webserver-base --dry-run
 	cargo package --list
+
 	echo "\033[1;35m[Packaging Typescript]\033[0m"
 	deno publish --dry-run --allow-dirty
+
 	echo "\033[1;35m[Finished Dry-Run Publish]\033[0m"
 
 .PHONY: docker_build

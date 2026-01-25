@@ -1,0 +1,22 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+
+- Whenever I ask you to solve an issue for me, please list out all the most likely reasons why you think this issue
+  could occur. Then tell me what you think the most likely solutions are. Then tell me what your preferred solution is.
+  Don't implement a solution for the problem until I explicitly tell you to proceed with implementation (this signal
+  must come after you you research the issue(s) and diagnose the potential solution(s)).
+- After implementing or modifying any code, always verify the changes by running `make lint test` from the repository
+  root. This ensures that linting passes and all tests succeed before completing the task.
+- Always write out types and type hints for every variable, parameter, struct, field, return type, etc.
+- Make sure to always implement code with security in mind. If we develop something insecurely/unsafely, then please
+  bring it to my attention. Mention the possible issue(s) and their potential solution(s). Don't code immediately - just
+  discuss with me, then I'll tell you to proceed with an implementation or not.
+- By default, make sure to follow all standard coding practices for the given languages we build with in this repo:
+  Rust, Typescript. But make sure to personalize the code to follow existing code patterns and error handling.
+- If Rust/Clippy says to use `#[allow]`, use `#[expect]` instead.
+- When writing unit tests, always assert an "expected" value against an "actual" value. If asserting objects, try to
+  compare 100% of all fields/sub-fields if possible (e.g. deterministic). Sometimes asserting 100% of all fields is not
+  possible, like if returned data is a generated timestamp, UUID, etc.

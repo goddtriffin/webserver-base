@@ -1,6 +1,6 @@
 {
   "name": "@todd/webserver-base",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "exports": {
     ".": "./static/script/webserver-base/mod.ts",
     "./bundle": "./static/script/webserver-base/bundle.ts",
@@ -29,6 +29,7 @@
   },
   "imports": {
     "@luca/esbuild-deno-loader": "jsr:@luca/esbuild-deno-loader@0.11.1",
+    "@std/assert": "jsr:@std/assert@1.0.17",
     "esbuild": "npm:esbuild@0.24.2"
   }
 }
