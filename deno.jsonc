@@ -1,6 +1,6 @@
 {
   "name": "@todd/webserver-base",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "exports": {
     ".": "./static/script/webserver-base/mod.ts",
     "./bundle": "./static/script/webserver-base/bundle.ts",

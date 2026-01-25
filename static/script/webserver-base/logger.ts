@@ -50,7 +50,7 @@ export interface ILogger {
 /**
  * The Logger class provides methods to log messages at different levels (DEBUG, WARN, INFO, ERROR).
  */
-export default class Logger implements ILogger {
+export class Logger implements ILogger {
   private readonly _debug: boolean;
 
   /**
