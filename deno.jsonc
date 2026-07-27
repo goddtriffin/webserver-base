@@ -1,9 +1,10 @@
 {
   "name": "@todd/webserver-base",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "exports": {
     ".": "./static/script/webserver-base/mod.ts",
     "./bundle": "./static/script/webserver-base/bundle.ts",
+    "./free-port": "./static/script/webserver-base/free-port.ts",
     "./frontend-error": "./static/script/webserver-base/frontend-error.ts",
     "./scitylana": "./static/script/webserver-base/scitylana.ts",
     "./logger": "./static/script/webserver-base/logger.ts"

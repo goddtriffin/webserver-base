@@ -2,7 +2,7 @@
 # Binary #
 ##########
 
-FROM rust:1.85.0-alpine3.21 AS binary_builder
+FROM rust:1.93-alpine3.21 AS binary_builder
 
 # update alpine linux dependencies
 RUN apk update

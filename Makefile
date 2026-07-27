@@ -65,7 +65,11 @@ gen_static: # generates static resources
 dev: gen_js gen_css gen_static ## runs the development binary
 	cargo build --package template-web-server --bin template-web-server
 	cp target/debug/template-web-server bin/
+	set -e; \
+	PORT="$${PORT:-$$(deno run --allow-net --allow-run=lsof static/script/webserver-base/free-port.ts template-web-server)}"; \
+	echo "==> http://127.0.0.1:$$PORT"; \
 	cd bin && \
+		PORT="$$PORT" \
 		ENVIRONMENT="development" \
 		PROJECT_NAME="template-web-server" \
 		PROJECT_DESCRIPTION="Here is a description of the project." \
@@ -85,7 +89,8 @@ lint: ## lints the codebase
 .PHONY: test
 test: ## runs tests
 	deno check static/script/
-	deno test
+	# --allow-net: free-port's tests bind real sockets to verify port detection
+	deno test --allow-net
 
 	cargo fmt --check
 	cargo check
@@ -122,7 +127,10 @@ docker_build: ## builds Docker container
 
 .PHONY: docker_run
 docker_run: ## runs Docker containers
-	docker compose up -d
+	set -e; \
+	HOST_PORT="$${HOST_PORT:-$$(deno run --allow-net --allow-run=lsof static/script/webserver-base/free-port.ts template-web-server)}"; \
+	echo "==> http://127.0.0.1:$$HOST_PORT"; \
+	HOST_PORT="$$HOST_PORT" docker compose up -d
 
 .PHONY: docker_stop
 docker_stop: ## stops Docker containers
