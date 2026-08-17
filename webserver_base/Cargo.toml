@@ -23,6 +23,9 @@ workspace = true
 # axum
 axum.workspace = true
 
+# async runtime (telegram notifier's background delivery worker)
+tokio.workspace = true
+
 # tracing
 tracing.workspace = true
 
@@ -39,8 +42,8 @@ handlebars.workspace = true
 # regex
 regex.workspace = true
 
-# http request
-reqwest.workspace = true
+# http request (`multipart` carries in-memory photo/document uploads)
+reqwest = { workspace = true, features = ["multipart"] }
 
 # time
 chrono.workspace = true

@@ -1578,6 +1578,7 @@ dependencies = [
  "hyper-util",
  "js-sys",
  "log",
+ "mime_guess",
  "percent-encoding",
  "pin-project-lite",
  "quinn",
@@ -2054,7 +2055,7 @@ dependencies = [
 
 [[package]]
 name = "template-web-server"
-version = "0.1.22"
+version = "0.1.23"
 dependencies = [
  "axum",
  "axum-extra",
@@ -2659,7 +2660,7 @@ dependencies = [
 
 [[package]]
 name = "webserver-base"
-version = "0.1.22"
+version = "0.1.23"
 dependencies = [
  "axum",
  "chrono",
@@ -2670,6 +2671,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "tokio",
  "tracing",
 ]
 

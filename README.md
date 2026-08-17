@@ -11,6 +11,8 @@ A Rust library which contains shared logic for all of my webserver projects.
 - common settings
 - HTML templates
 - integration: Axum + Plausible Analytics
+- Telegram bot notifier: entity-based formatting (no escaping), 4096/1024 chunking, per-chat rate
+  limiting, `retry_after`-aware retries, and token redaction
 - `POST`ing frontend Typescript `Error`s to a Rust API endpoint
 - Deno script to transpile+bundle `.ts` -> `.js`
 
