@@ -69,13 +69,13 @@ dev: gen_js gen_css gen_static ## runs the development binary
 	PORT="$${PORT:-$$(deno run --allow-net --allow-run=lsof static/script/webserver-base/free-port.ts template-web-server)}"; \
 	echo "==> http://127.0.0.1:$$PORT"; \
 	cd bin && \
-		PORT="$$PORT" \
-		ENVIRONMENT="development" \
-		PROJECT_NAME="template-web-server" \
-		PROJECT_DESCRIPTION="Here is a description of the project." \
-		PROJECT_KEYWORDS="Todd,Everett,Griffin,todo,project" \
-		HOME_URL="https://www.template-web-server.com" \
-		ANALYTICS_DOMAIN="test.toddgriffin.me" \
+		WSB_PORT="$$PORT" \
+		WSB_ENVIRONMENT="local" \
+		WSB_ANALYTICS_DOMAIN="test.toddgriffin.me" \
+		TWS_PROJECT="Template Web Server" \
+		TWS_DESCRIPTION="Here is a description of the project." \
+		TWS_KEYWORDS="Todd,Everett,Griffin,todo,project" \
+		TWS_BASE_URL="https://www.template-web-server.com" \
 		./template-web-server
 
 .PHONY: lint
@@ -93,14 +93,14 @@ test: ## runs tests
 	deno test --allow-net
 
 	cargo fmt --check
-	cargo check
-	cargo clippy --tests
-	cargo test
+	cargo check --all-features
+	cargo clippy --all-targets --all-features
+	cargo test --all-features
 
 .PHONY: fix
 fix: ## fixes the codebase
-	cargo fix --allow-dirty --allow-staged
-	cargo clippy --fix --allow-dirty --allow-staged
+	cargo fix --all-features --allow-dirty --allow-staged
+	cargo clippy --all-features --fix --allow-dirty --allow-staged
 
 .PHONY: docs
 docs: ## generates local documentation
@@ -147,7 +147,6 @@ docker_mem_usage: ## displays the memory usage of the currently running Docker c
 .PHONY: docker_push
 docker_push: ## pushes Docker images to Docker Hub
 	# tag
-	docker tag goddtriffin/template-web-server:latest goddtriffin/rlhandbook-website:latest
 	docker tag goddtriffin/template-web-server:latest goddtriffin/scannable-codes-website:latest
 	docker tag goddtriffin/template-web-server:latest goddtriffin/turnbased-website:latest
 	docker tag goddtriffin/template-web-server:latest goddtriffin/scribble-jump-website:latest
@@ -157,7 +156,6 @@ docker_push: ## pushes Docker images to Docker Hub
 	docker tag goddtriffin/template-web-server:latest goddtriffin/5ddiplomacy-server:latest
 
 	# push
-	docker push goddtriffin/rlhandbook-website:latest
 	docker push goddtriffin/scannable-codes-website:latest
 	docker push goddtriffin/turnbased-website:latest
 	docker push goddtriffin/scribble-jump-website:latest

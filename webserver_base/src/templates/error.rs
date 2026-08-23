@@ -1,40 +1,50 @@
-use handlebars::{RenderError, TemplateError};
-use std::fmt::{Debug, Formatter};
-use std::{error, fmt, io};
+//! Failures from loading or rendering templates.
 
-#[derive(Debug)]
-pub enum TemplateRegistryError {
-    FileIOError(io::Error),
-    TemplateError(TemplateError),
-    RenderError(RenderError),
-}
+use std::path::PathBuf;
 
-impl error::Error for TemplateRegistryError {}
+use handlebars::{RenderError, TemplateError as HandlebarsTemplateError};
 
-impl fmt::Display for TemplateRegistryError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::FileIOError(io_error) => std::fmt::Display::fmt(&io_error, f),
-            Self::TemplateError(template_error) => std::fmt::Display::fmt(&template_error, f),
-            Self::RenderError(render_error) => std::fmt::Display::fmt(&render_error, f),
-        }
-    }
-}
+/// Why a template could not be loaded or rendered.
+#[derive(Debug, thiserror::Error)]
+pub enum TemplateError {
+    /// A template directory could not be read.
+    #[error("failed to read template directory `{path}`")]
+    ReadDirectory {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
 
-impl From<io::Error> for TemplateRegistryError {
-    fn from(io_error: io::Error) -> Self {
-        Self::FileIOError(io_error)
-    }
-}
+    /// A template file failed to compile.
+    #[error("failed to compile template `{name}`")]
+    Compile {
+        name: String,
+        #[source]
+        source: Box<HandlebarsTemplateError>,
+    },
 
-impl From<TemplateError> for TemplateRegistryError {
-    fn from(template_error: TemplateError) -> Self {
-        Self::TemplateError(template_error)
-    }
-}
+    /// A template failed to render — usually strict mode catching a field the
+    /// data did not supply.
+    #[error("failed to render template `{name}`")]
+    Render {
+        name: String,
+        #[source]
+        source: Box<RenderError>,
+    },
 
-impl From<RenderError> for TemplateRegistryError {
-    fn from(render_error: RenderError) -> Self {
-        Self::RenderError(render_error)
-    }
+    /// A page's JSON-LD document could not be serialized.
+    #[error("failed to serialize the JSON-LD document for page `{page}`")]
+    JsonLd {
+        page: String,
+        #[source]
+        source: serde_json::Error,
+    },
+
+    /// The data handed to a render could not be serialized.
+    #[error("failed to serialize template data for page `{page}`")]
+    Serialize {
+        page: String,
+        #[source]
+        source: serde_json::Error,
+    },
 }

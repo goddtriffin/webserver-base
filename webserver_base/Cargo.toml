@@ -19,34 +19,96 @@ path = "src/lib.rs"
 [lints]
 workspace = true
 
+[features]
+default = []
+
+# Content-hashed static assets, plus the cache-control middleware pair.
+assets = ["dep:axum", "dep:md5", "dep:regex", "dep:chrono"]
+
+# Handlebars registry and the three template-data types.
+templates = ["dep:handlebars", "dep:chrono"]
+
+# Plausible Analytics event forwarding, with true-client-IP resolution.
+analytics = ["dep:axum", "dep:plausible-rs", "dep:reqwest"]
+
+# sitemap.xml generation.
+sitemap = ["dep:sitemap-rs", "dep:xml-builder", "dep:chrono"]
+
+# Sentry + tracing initialisation, in the one order that works.
+observability = ["dep:sentry", "dep:tracing-subscriber"]
+
+# Outbound Telegram Bot API notifier.
+telegram = ["dep:reqwest", "dep:tokio"]
+
+# The web server itself: builder, shared state, bootstrap, graceful shutdown.
+webserver = [
+  "dep:axum",
+  "dep:axum-extra",
+  "dep:tower",
+  "dep:tower-http",
+  "dep:tokio",
+]
+
+# Page declarations that produce both routes and sitemap entries.
+pages = ["webserver", "templates", "sitemap"]
+
+# Todd Everett Griffin's personal defaults.
+preset = ["templates"]
+
+full = [
+  "assets",
+  "templates",
+  "analytics",
+  "sitemap",
+  "observability",
+  "telegram",
+  "webserver",
+  "pages",
+  "preset",
+]
+
 [dependencies]
-# axum
-axum.workspace = true
-
-# async runtime (telegram notifier's background delivery worker)
-tokio.workspace = true
-
-# tracing
-tracing.workspace = true
-
-# serde
+# always present: tiny, and used by every kit
 serde.workspace = true
 serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
 
-# crypto
-md5.workspace = true
+# assets, analytics, webserver
+axum = { workspace = true, optional = true }
 
-# templating
-handlebars.workspace = true
+# webserver
+axum-extra = { workspace = true, optional = true }
+tower = { workspace = true, optional = true }
+tower-http = { workspace = true, optional = true }
 
-# regex
-regex.workspace = true
+# webserver (serve loop), telegram (delivery worker)
+tokio = { workspace = true, optional = true }
 
-# http request (`multipart` carries in-memory photo/document uploads)
-reqwest = { workspace = true, features = ["multipart"] }
+# assets (content hashing + source-map rewriting)
+md5 = { workspace = true, optional = true }
+regex = { workspace = true, optional = true }
 
-# time
-chrono.workspace = true
+# templates
+handlebars = { workspace = true, optional = true }
 
-# plausible analytics
-plausible-rs.workspace = true
+# assets (cache expiry), templates (copyright year), sitemap (lastmod)
+chrono = { workspace = true, optional = true }
+
+# analytics, telegram
+reqwest = { workspace = true, optional = true, features = ["multipart"] }
+plausible-rs = { workspace = true, optional = true }
+
+# sitemap
+sitemap-rs = { workspace = true, optional = true }
+xml-builder = { workspace = true, optional = true }
+
+# observability
+sentry = { workspace = true, optional = true }
+tracing-subscriber = { workspace = true, optional = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+
+[package.metadata.docs.rs]
+all-features = true

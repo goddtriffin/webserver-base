@@ -1,301 +1,88 @@
-use axum::handler::HandlerWithoutStateExt;
-use axum::http::{HeaderMap, StatusCode};
-use axum::response::{Html, IntoResponse, Redirect, Response};
-use axum::routing::{get, post};
-use axum::{Form, Router, serve};
-use axum::{
-    Json,
-    extract::{ConnectInfo, DefaultBodyLimit, State},
+use webserver_base::analytics::AnalyticsConfig;
+use webserver_base::env;
+use webserver_base::observability::Observability;
+use webserver_base::templates::{
+    BaseTemplateData, GoddtriffinParams, PageTemplateData, TemplateRegistry, robots,
 };
-use axum_extra::routing::RouterExt;
-use chrono::{DateTime, Utc};
-use reqwest::Client;
-use sentry::ClientInitGuard;
-use sentry::integrations::tower::NewSentryLayer;
-use sitemap_rs::image::Image;
-use sitemap_rs::url::{ChangeFrequency, DEFAULT_PRIORITY, Url};
-use sitemap_rs::url_builder::UrlBuilder;
-use sitemap_rs::url_set::UrlSet;
-use std::fs::File;
-use std::io::BufWriter;
-use std::net::{IpAddr, SocketAddr};
-use std::str::FromStr;
-use std::sync::Arc;
-use template_web_server::template_data::TemplateData;
-use template_web_server::webserver_error::WebserverResult;
-use tokio::net::TcpListener;
-use tower::ServiceBuilder;
-use tower_http::LatencyUnit;
-use tower_http::services::{ServeDir, ServeFile};
-use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
-use tracing::{Level, info, instrument};
-use tracing_subscriber::EnvFilter;
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
-use webserver_base::{
-    axum_plausible_analytics::{AxumPlausibleAnalyticsHandler, RequestPayload},
-    base_settings::BaseSettings,
-    cache_buster::CacheBuster,
-    frontend_error_logger::FrontendErrorPayload,
-    templates::{schema::page::Page, template_registry::TemplateRegistry},
-};
+use webserver_base::webserver::{Pages, WebServer, WebServerError};
+use webserver_base::{Environment, bootstrap};
 
-#[derive(Clone)]
-struct AppState {
-    settings: BaseSettings,
-    cache_buster: CacheBuster,
-    template_registry: TemplateRegistry<'static>,
-    template_data: TemplateData,
-    plausible_client: Arc<AxumPlausibleAnalyticsHandler>,
-}
+fn main() -> Result<(), WebServerError> {
+    let environment: Environment = Environment::from_env()?;
 
-impl AppState {
-    #[instrument(skip_all)]
-    pub fn new(settings: &BaseSettings) -> WebserverResult<Self> {
-        // sitemaps
-        generate_sitemaps(settings)?;
-
-        // generate CacheBuster (must occur after sitemap generation)
-        let mut cache_buster: CacheBuster = CacheBuster::new("static");
-        cache_buster.gen_cache();
-        cache_buster.update_source_map_references();
-        info!("{}", cache_buster);
-        cache_buster.print_to_file("..");
-
-        Ok(Self {
-            settings: settings.clone(),
-            cache_buster: cache_buster.clone(),
-            template_registry: TemplateRegistry::default(),
-            template_data: TemplateData::new(settings.clone(), &cache_buster),
-            plausible_client: Arc::new(AxumPlausibleAnalyticsHandler::new_with_client(
-                Client::new(),
-            )),
-        })
-    }
-}
-
-#[instrument(skip_all)]
-fn main() {
-    // env vars
-    let settings: BaseSettings = BaseSettings::default();
-
-    // sentry
-    let _guard: ClientInitGuard = sentry::init((
-        settings.sentry_dsn.clone(),
-        sentry::ClientOptions {
-            release: sentry::release_name!(),
-            attach_stacktrace: true,
-            ..Default::default()
-        },
-    ));
-
-    // Must manually create a multithreaded tokio runtime so that the Sentry hub will be applied to all threads
-    tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .unwrap()
-        .block_on(async_main(settings))
-        .unwrap();
-}
-
-#[instrument(skip_all)]
-async fn async_main(settings: BaseSettings) -> WebserverResult<()> {
-    // initialize tracing
-    tracing_subscriber::Registry::default()
-        .with(
-            EnvFilter::try_from_default_env()
-                .or_else(|_| EnvFilter::try_new("info"))
-                .unwrap(),
-        )
-        .with(tracing_subscriber::fmt::Layer::default())
-        .with(sentry::integrations::tracing::layer())
-        .init();
-
-    // app state
-    let app_state: AppState = AppState::new(&settings)?;
-
-    let no_cache_routes: Router<Arc<AppState>> = Router::new()
-        .route("/", get(home))
-        .route_with_tsr("/404", get(four_oh_four))
-        .nest(
-            "/api/v1",
-            Router::new()
-                .route_with_tsr("/health", get(health_check))
-                .route_with_tsr("/scitylana", post(analytics))
-                .route_with_tsr("/frontend-error", post(frontend_error))
-                .fallback(fallback),
-        )
-        .nest_service(
-            "/favicon.ico",
-            ServeFile::new(
-                app_state
-                    .cache_buster
-                    .get_file("static/image/favicon/favicon.ico"),
-            ),
-        )
-        .nest_service(
-            "/robots.txt",
-            ServeFile::new(app_state.cache_buster.get_file("static/file/robots.txt")),
-        )
-        .nest_service(
-            "/sitemap.xml",
-            ServeFile::new(app_state.cache_buster.get_file("static/file/sitemap.xml")),
-        )
-        .nest_service(
-            "/humans.txt",
-            ServeFile::new(app_state.cache_buster.get_file("static/file/humans.txt")),
-        )
-        .layer(axum::middleware::from_fn(
-            CacheBuster::never_cache_middleware,
-        ));
-
-    let forever_cache_routes: Router<Arc<AppState>> = Router::new()
-        .nest_service(
-            "/static",
-            ServeDir::new("static").fallback(fallback.into_service()),
-        )
-        .layer(axum::middleware::from_fn(
-            CacheBuster::forever_cache_middleware,
-        ));
-
-    // build our application with a route
-    let app: Router = Router::new()
-        .nest("", no_cache_routes)
-        .nest("", forever_cache_routes)
-        .fallback(fallback)
-        .with_state(Arc::new(app_state))
-        .layer(
-            ServiceBuilder::new()
-                .layer(DefaultBodyLimit::max(1024))
-                .layer(
-                    TraceLayer::new_for_http()
-                        .make_span_with(
-                            DefaultMakeSpan::default()
-                                .level(Level::INFO)
-                                .include_headers(false),
-                        )
-                        .on_response(
-                            DefaultOnResponse::new()
-                                .level(Level::INFO)
-                                .latency_unit(LatencyUnit::Micros),
+    bootstrap(
+        Observability::from_env(environment)?,
+        move |shutdown| async move {
+            WebServer::from_env(environment)?
+                .templates(
+                    TemplateRegistry::from_dir("html")?,
+                    BaseTemplateData::goddtriffin(GoddtriffinParams {
+                        project: env::required("TWS_PROJECT")?,
+                        description: env::required("TWS_DESCRIPTION")?,
+                        keywords: keywords(&env::required("TWS_KEYWORDS")?),
+                        base_url: env::required("TWS_BASE_URL")?,
+                        social_image: String::from("/static/image/social/todo.webp"),
+                        theme_color: String::from("#f7cb64"),
+                        copyright_start: String::from("1998"),
+                        style_sheets: vec![String::from("static/stylesheet/main.css")],
+                        scripts: vec![String::from("static/script/main.js")],
+                    }),
+                )
+                .assets("static")
+                .write_cache_manifest("..")
+                .analytics(AnalyticsConfig::from_env()?)
+                .health()
+                .pages(
+                    Pages::new()
+                        .static_page(PageTemplateData::new("home", "Home", "/"), ())
+                        .extend_images(["/static/image/social/todo.webp"])
+                        .not_found(
+                            PageTemplateData::new("404", "404", "/404")
+                                .with_robots(robots::NOINDEX_FOLLOW),
+                            (),
                         ),
                 )
-                .layer(NewSentryLayer::new_from_top()),
-        );
-
-    // run it
-    let addr: SocketAddr = SocketAddr::new(
-        IpAddr::from_str(settings.host.as_str()).expect("failed to parse host"),
-        settings.port,
-    );
-    info!("listening on {}", addr);
-    let listener: TcpListener = TcpListener::bind(&addr).await.unwrap();
-    serve(
-        listener,
-        app.into_make_service_with_connect_info::<SocketAddr>(),
-    )
-    .await
-    .unwrap();
-
-    Ok(())
-}
-
-#[instrument(skip_all)]
-async fn home(State(state): State<Arc<AppState>>) -> Html<String> {
-    Html(
-        state
-            .template_registry
-            .render(
-                "home",
-                &state.template_data.clone().render(Page::new(
-                    String::from("Home"),
-                    String::from("/"),
-                    vec![String::from("static/stylesheet/main.css")],
-                    vec![String::from("static/script/main.js")],
-                )),
-            )
-            .unwrap(),
+                .run(shutdown)
+                .await
+        },
     )
 }
 
-#[instrument(skip_all)]
-async fn four_oh_four(State(state): State<Arc<AppState>>) -> Html<String> {
-    Html(
-        state
-            .template_registry
-            .render(
-                "404",
-                &state.template_data.clone().render(Page::new(
-                    String::from("404"),
-                    String::from("/404"),
-                    vec![String::from("static/stylesheet/main.css")],
-                    vec![String::from("static/script/main.js")],
-                )),
-            )
-            .unwrap(),
-    )
+/// Splits a comma-delimited keyword list, dropping blanks.
+fn keywords(raw: &str) -> Vec<String> {
+    raw.split(',')
+        .map(str::trim)
+        .filter(|keyword| !keyword.is_empty())
+        .map(String::from)
+        .collect()
 }
 
-#[instrument(skip_all)]
-async fn fallback() -> Response {
-    Redirect::to("/404").into_response()
-}
+#[cfg(test)]
+mod tests {
+    use super::keywords;
 
-async fn health_check() -> StatusCode {
-    StatusCode::OK
-}
-
-#[instrument(skip_all)]
-async fn analytics(
-    headers: HeaderMap,
-    State(state): State<Arc<AppState>>,
-    ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    Form(incoming_payload): Form<RequestPayload>,
-) -> StatusCode {
-    let plausible_client: Arc<AxumPlausibleAnalyticsHandler> = Arc::clone(&state.plausible_client);
-    plausible_client
-        .handle(headers, state.settings.clone(), addr, incoming_payload)
-        .await
-}
-
-#[instrument(skip_all)]
-async fn frontend_error(Json(frontend_error_payload): Json<FrontendErrorPayload>) -> StatusCode {
-    frontend_error_payload.log();
-    StatusCode::OK
-}
-
-#[instrument(skip_all)]
-fn generate_sitemaps(settings: &BaseSettings) -> WebserverResult<()> {
-    // track all the base routes (e.g. "/blog", "/projects", etc.)
-    let base_routes: Vec<&str> = vec!["/"];
-
-    // generate <url> for all routes
-    let mut urls: Vec<Url> = Vec::new();
-
-    // base routes
-    for base_route in base_routes {
-        // create URL
-        let mut url_builder: UrlBuilder =
-            Url::builder(format!("{}{base_route}", settings.home_url));
-        url_builder
-            .last_modified(DateTime::from(Utc::now()))
-            .change_frequency(ChangeFrequency::Weekly)
-            .priority(DEFAULT_PRIORITY);
-
-        // only add image for home page
-        if base_route.is_empty() {
-            url_builder.images(vec![Image::new(format!(
-                "{}/static/image/social/profile-picture.webp",
-                settings.home_url
-            ))]);
-        }
-
-        // store URL
-        urls.push(url_builder.build()?);
+    #[test]
+    fn keywords_are_split_trimmed_and_compacted() {
+        let expected: Vec<String> = vec![
+            String::from("Todd"),
+            String::from("Everett"),
+            String::from("Griffin"),
+        ];
+        let actual: Vec<String> = keywords(" Todd , Everett ,, Griffin, ");
+        assert_eq!(expected, actual);
     }
 
-    // write sitemap.xml to static files directory
-    let url_set: UrlSet = UrlSet::new(urls)?;
-    url_set.write(BufWriter::new(File::create("./static/file/sitemap.xml")?))?;
-    Ok(())
+    #[test]
+    fn a_single_keyword_needs_no_delimiter() {
+        let expected: Vec<String> = vec![String::from("qr")];
+        let actual: Vec<String> = keywords("qr");
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn an_all_blank_list_yields_nothing_rather_than_an_empty_keyword() {
+        let expected: Vec<String> = Vec::new();
+        let actual: Vec<String> = keywords(" , , ");
+        assert_eq!(expected, actual);
+    }
 }

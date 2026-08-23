@@ -1,9 +1,0 @@
-pub mod copyright;
-pub mod footer;
-pub mod header;
-pub mod image;
-pub mod metadata;
-pub mod nav_link;
-pub mod page;
-pub mod social_media;
-pub mod twitter;
