@@ -1,8 +1,8 @@
 //! The web server builder.
 
+use std::future::IntoFuture;
 use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
-use std::time::Duration;
 
 use axum::extract::DefaultBodyLimit;
 use axum::http::StatusCode;
@@ -10,12 +10,11 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Router, serve};
 use tokio::net::TcpListener;
-use tower::ServiceBuilder;
 use tower_http::LatencyUnit;
 use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
 use tracing::{Level, info, instrument, warn};
 
-use crate::env::{self, EnvError};
+use crate::env;
 use crate::environment::Environment;
 
 use super::error::WebServerError;
@@ -32,16 +31,24 @@ pub const ENV_PORT: &str = "WSB_PORT";
 pub const DEFAULT_PORT: u16 = 8080;
 
 /// The request body ceiling used when none is set.
-pub const DEFAULT_BODY_LIMIT: usize = 1024;
+///
+/// 256 KiB comfortably covers a form post or a JSON payload while still
+/// bounding abuse. A project that accepts uploads raises it explicitly.
+pub const DEFAULT_BODY_LIMIT: usize = 256 * 1024;
 
 /// The prefix every built-in endpoint is nested under.
-pub const DEFAULT_API_PREFIX: &str = "/api/v1";
+///
+/// Fixed rather than configurable: every route in every project is then
+/// predictable from the outside, and the derived analytics endpoint can be
+/// stated in the documentation without qualification.
+pub const API_PREFIX: &str = "/api/v1";
 
 /// An HTTP server.
 ///
-/// Requires only an address, a port and an [`Environment`]; everything else is
-/// opt-in, from a sidecar serving one health check to a full site. A single
-/// binary can run several of these and drain them from one [`Shutdown`].
+/// Requires only an address, a port and an [`Environment`]. A sidecar that
+/// serves nothing but its health check is a valid server; a full site adds
+/// [`frontend`](WebServer::frontend). A single binary can run several of these
+/// and drain them from one [`Shutdown`].
 pub struct WebServer<S = ()> {
     host: String,
     port: u16,
@@ -49,24 +56,10 @@ pub struct WebServer<S = ()> {
     app: S,
 
     body_limit: usize,
-    drain_timeout: Duration,
-    api_prefix: String,
-    health: bool,
-
     router: Router<WebServerState<S>>,
 
-    #[cfg(feature = "templates")]
-    base: Option<crate::templates::BaseTemplateData>,
-    #[cfg(feature = "templates")]
-    templates: Option<crate::templates::TemplateRegistry<'static>>,
-    #[cfg(feature = "assets")]
-    asset_directory: Option<String>,
-    #[cfg(feature = "assets")]
-    cache_manifest_directory: Option<String>,
-    #[cfg(feature = "analytics")]
-    analytics: Option<crate::analytics::AnalyticsConfig>,
     #[cfg(feature = "pages")]
-    pages: Option<super::pages::Pages<S>>,
+    frontend: Option<super::frontend::FrontendParams<S>>,
 }
 
 impl WebServer<()> {
@@ -76,17 +69,17 @@ impl WebServer<()> {
         Self::with_state(host, port, environment, ())
     }
 
-    /// A server with no application state, reading [`ENV_HOST`] and
-    /// [`ENV_PORT`].
+    /// A server with no application state, read entirely from the environment.
     ///
-    /// `WSB_HOST` defaults to `127.0.0.1` locally and `0.0.0.0` in production;
-    /// `WSB_PORT` defaults to [`DEFAULT_PORT`].
+    /// `WSB_ENVIRONMENT` is required. `WSB_HOST` defaults to `127.0.0.1`
+    /// locally and `0.0.0.0` in production; `WSB_PORT` defaults to
+    /// [`DEFAULT_PORT`].
     ///
     /// # Errors
     ///
-    /// [`WebServerError::Env`] if either variable is set but malformed.
-    pub fn from_env(environment: Environment) -> Result<Self, WebServerError> {
-        Self::from_env_with_state(environment, ())
+    /// [`WebServerError::Env`] if a variable is missing or malformed.
+    pub fn from_env() -> Result<Self, WebServerError> {
+        Self::from_env_with_state(())
     }
 }
 
@@ -108,32 +101,20 @@ where
             environment,
             app,
             body_limit: DEFAULT_BODY_LIMIT,
-            drain_timeout: DEFAULT_DRAIN_TIMEOUT,
-            api_prefix: String::from(DEFAULT_API_PREFIX),
-            health: false,
             router: Router::new(),
-            #[cfg(feature = "templates")]
-            base: None,
-            #[cfg(feature = "templates")]
-            templates: None,
-            #[cfg(feature = "assets")]
-            asset_directory: None,
-            #[cfg(feature = "assets")]
-            cache_manifest_directory: None,
-            #[cfg(feature = "analytics")]
-            analytics: None,
             #[cfg(feature = "pages")]
-            pages: None,
+            frontend: None,
         }
     }
 
-    /// A server carrying application state, reading [`ENV_HOST`] and
-    /// [`ENV_PORT`].
+    /// A server carrying application state, read entirely from the
+    /// environment.
     ///
     /// # Errors
     ///
-    /// [`WebServerError::Env`] if either variable is set but malformed.
-    pub fn from_env_with_state(environment: Environment, app: S) -> Result<Self, WebServerError> {
+    /// [`WebServerError::Env`] if a variable is missing or malformed.
+    pub fn from_env_with_state(app: S) -> Result<Self, WebServerError> {
+        let environment: Environment = Environment::from_env()?;
         let host: String = env::optional(ENV_HOST).unwrap_or_else(|| {
             if environment.is_production() {
                 String::from("0.0.0.0")
@@ -147,32 +128,13 @@ where
         Ok(Self::with_state(host, port, environment, app))
     }
 
-    /// Serves `GET {api_prefix}/health`, answering `200`.
-    #[must_use]
-    pub const fn health(mut self) -> Self {
-        self.health = true;
-        self
-    }
-
     /// Caps request bodies. Defaults to [`DEFAULT_BODY_LIMIT`].
+    ///
+    /// The one size that genuinely varies: an image-upload endpoint and a
+    /// landing page have nothing in common here.
     #[must_use]
     pub const fn body_limit(mut self, body_limit: usize) -> Self {
         self.body_limit = body_limit;
-        self
-    }
-
-    /// How long in-flight work gets once shutdown starts, defaulting to
-    /// [`DEFAULT_DRAIN_TIMEOUT`]. Raise it for long uploads.
-    #[must_use]
-    pub const fn drain_timeout(mut self, drain_timeout: Duration) -> Self {
-        self.drain_timeout = drain_timeout;
-        self
-    }
-
-    /// Changes the prefix the built-in endpoints are nested under.
-    #[must_use]
-    pub fn api_prefix(mut self, api_prefix: impl Into<String>) -> Self {
-        self.api_prefix = api_prefix.into();
         self
     }
 
@@ -190,8 +152,7 @@ where
         self
     }
 
-    /// Nests a bare `tower` service under `path` — a `ServeDir`, or a
-    /// self-contained `Router<()>`.
+    /// Nests a service under `path`.
     #[must_use]
     pub fn nest_service<T>(mut self, path: &str, service: T) -> Self
     where
@@ -200,75 +161,33 @@ where
             + Send
             + Sync
             + 'static,
-        T::Response: IntoResponse,
+        T::Response: axum::response::IntoResponse,
         T::Future: Send + 'static,
     {
         self.router = self.router.nest_service(path, service);
         self
     }
 
-    /// Supplies the template registry and the site's base data.
-    #[cfg(feature = "templates")]
-    #[must_use]
-    pub fn templates(
-        mut self,
-        registry: crate::templates::TemplateRegistry<'static>,
-        base: crate::templates::BaseTemplateData,
-    ) -> Self {
-        self.templates = Some(registry);
-        self.base = Some(base);
-        self
-    }
-
-    /// Serves content-hashed static assets out of `asset_directory`.
+    /// Declares this server a frontend: it serves HTML to humans.
     ///
-    /// Hashed in place at start-up, after the sitemap is written so that it is
-    /// hashed too. Adds `/static`, `/favicon.ico`, `/robots.txt`,
-    /// `/humans.txt` and `/sitemap.xml`.
-    #[cfg(feature = "assets")]
-    #[must_use]
-    pub fn assets(mut self, asset_directory: impl Into<String>) -> Self {
-        self.asset_directory = Some(asset_directory.into());
-        self
-    }
-
-    /// Also writes `cache-buster.json` into `directory`, for tooling outside
-    /// this process.
-    #[cfg(feature = "assets")]
-    #[must_use]
-    pub fn write_cache_manifest(mut self, directory: impl Into<String>) -> Self {
-        self.cache_manifest_directory = Some(directory.into());
-        self
-    }
-
-    /// Serves `POST {api_prefix}/scitylana`, forwarding pageviews to Plausible.
-    #[cfg(feature = "analytics")]
-    #[must_use]
-    pub fn analytics(mut self, config: crate::analytics::AnalyticsConfig) -> Self {
-        self.analytics = Some(config);
-        self
-    }
-
-    /// Declares the site's pages, producing both routes and `sitemap.xml`.
+    /// This is the line between a site and a service, and everything downstream
+    /// hangs off it — the embedded layout, the icon set, the web manifest,
+    /// `robots.txt`, the sitemaps, analytics and browser error monitoring. A
+    /// server that never calls it needs none of them and boots clean.
     #[cfg(feature = "pages")]
     #[must_use]
-    pub fn pages(mut self, pages: super::pages::Pages<S>) -> Self {
-        self.pages = Some(pages);
+    pub fn frontend(mut self, params: super::frontend::FrontendParams<S>) -> Self {
+        self.frontend = Some(params);
         self
     }
 
-    /// Binds, serves, and drains on `shutdown`, returning once the drain
-    /// completes or [`WebServer::drain_timeout`] elapses.
+    /// Binds, serves, and drains.
     ///
     /// # Errors
     ///
-    /// [`WebServerError`] if the sitemap or asset cache cannot be built, the
-    /// listener cannot bind, or the server stops with an error.
+    /// [`WebServerError`] if the host is unparseable, the port cannot be bound,
+    /// the frontend cannot be assembled, or serving fails.
     #[instrument(skip_all)]
-    #[expect(
-        clippy::too_many_lines,
-        reason = "one linear assembly, read top to bottom"
-    )]
     pub async fn run(self, shutdown: Shutdown) -> Result<(), WebServerError> {
         let Self {
             host,
@@ -276,125 +195,66 @@ where
             environment,
             app,
             body_limit,
-            drain_timeout,
-            api_prefix,
-            health,
             router,
-            #[cfg(feature = "templates")]
-            base,
-            #[cfg(feature = "templates")]
-            templates,
-            #[cfg(feature = "assets")]
-            asset_directory,
-            #[cfg(feature = "assets")]
-            cache_manifest_directory,
-            #[cfg(feature = "analytics")]
-            analytics,
             #[cfg(feature = "pages")]
-            pages,
+            frontend,
         } = self;
 
-        // ── 1. sitemap, before anything hashes the directory it lives in ────
-        #[cfg(feature = "pages")]
-        let not_found = {
-            let mut not_found = None;
-            if let Some(pages) = pages.as_ref() {
-                let Some(base) = base.as_ref() else {
-                    return Err(WebServerError::PagesRequireTemplates);
-                };
-                let urls = pages.sitemap_urls()?;
-                crate::sitemap::write_sitemap(
-                    base.base_url(),
-                    &urls,
-                    crate::sitemap::SITEMAP_OUTPUT_PATH,
-                )?;
-                info!("wrote {} urls to the sitemap", urls.len());
-                not_found = pages.not_found_page();
-            }
-            not_found
-        };
+        // Hashing is a build step, so this only ever reads what the build
+        // produced. A project with no `static/` gets an empty map.
+        let cache_buster: crate::assets::CacheBuster = crate::assets::CacheBuster::load()?;
 
-        // ── 2. content-hash the asset directory ─────────────────────────────
-        #[cfg(feature = "assets")]
-        let cache_buster: Option<crate::assets::CacheBuster> = match asset_directory.as_ref() {
-            None => None,
-            Some(directory) => {
-                let cache_buster = crate::assets::CacheBuster::build(directory)?;
-                if let Some(manifest_directory) = cache_manifest_directory.as_ref() {
-                    cache_buster.write_manifest(manifest_directory)?;
-                }
-                info!("hashed {} assets", cache_buster.cache().len());
-                Some(cache_buster)
-            }
-        };
-
-        // ── 3. assemble the state every handler sees ────────────────────────
-        #[cfg(feature = "analytics")]
-        let analytics_handler = analytics.map(|config| {
-            std::sync::Arc::new(crate::analytics::AnalyticsHandler::new(config, environment))
-        });
-
-        let state: WebServerState<S> = WebServerState::new(StateParts {
-            host: host.clone(),
-            port,
-            environment,
-            shutdown: shutdown.clone(),
-            #[cfg(feature = "templates")]
-            base,
-            #[cfg(feature = "templates")]
-            templates,
-            #[cfg(feature = "assets")]
-            cache_buster: cache_buster.clone(),
-            #[cfg(feature = "analytics")]
-            analytics: analytics_handler,
-            app,
-        });
-
-        // ── 4. routes ───────────────────────────────────────────────────────
         let mut no_cache: Router<WebServerState<S>> = router;
+        let mut built_in: Router<WebServerState<S>> = Router::new().route("/health", get(health));
 
         #[cfg(feature = "pages")]
-        if let Some(pages) = pages {
-            no_cache = no_cache.merge(pages.into_router());
+        let mut frontend_runtime: Option<crate::templates::FrontendRuntime> = None;
+        #[cfg(feature = "pages")]
+        let mut base: Option<crate::templates::BaseTemplateData> = None;
+        #[cfg(feature = "pages")]
+        let mut templates: Option<crate::templates::TemplateRegistry<'static>> = None;
+        #[cfg(feature = "pages")]
+        let mut not_found = None;
+        #[cfg(feature = "pages")]
+        let mut proxy_scripts: Option<Router<WebServerState<S>>> = None;
+
+        #[cfg(feature = "pages")]
+        if let Some(params) = frontend {
+            let registry: crate::templates::TemplateRegistry<'static> =
+                crate::templates::TemplateRegistry::from_dir(crate::templates::TEMPLATE_ROOT)?;
+
+            let built = super::frontend::Frontend::build(params, &cache_buster, environment)?;
+
+            no_cache = no_cache.merge(well_known_routes(&built.well_known));
+            no_cache = no_cache.merge(icon_routes(&cache_buster, built.has_svg_icon));
+
+            let (scripts, endpoints) = proxy_routes(&built);
+            // The scripts are deliberately kept out of `no_cache`: they carry
+            // the vendor's own cache policy, and stamping `no-store` over it
+            // would re-download the analytics script on every page view.
+            proxy_scripts = Some(scripts);
+            built_in = built_in.merge(endpoints);
+
+            not_found = Some(built.not_found.clone());
+            no_cache = no_cache.merge(built.pages.into_router());
+
+            frontend_runtime = Some(built.runtime);
+            base = Some(built.base);
+            templates = Some(registry);
         }
 
-        let mut built_in: Router<WebServerState<S>> = Router::new();
-        if health {
-            built_in = built_in.route("/health", get(health_check));
-        }
-        #[cfg(feature = "analytics")]
-        {
-            built_in = built_in.route("/scitylana", axum::routing::post(analytics_endpoint::<S>));
-        }
-        no_cache = no_cache.nest(&api_prefix, built_in);
+        let no_cache: Router<WebServerState<S>> = no_cache.nest(API_PREFIX, built_in);
 
-        #[cfg(feature = "assets")]
-        if let Some(cache_buster) = cache_buster.as_ref() {
-            no_cache = attach_singleton_files(no_cache, cache_buster);
+        let mut app_router: Router<WebServerState<S>> = apply_cache_policy(no_cache, &cache_buster);
+
+        // Merged after the never-cache layer so the upstream's own headers
+        // survive: the vendor scripts carry their own policy, and stamping
+        // `no-store` over it would re-download them on every page view.
+        #[cfg(feature = "pages")]
+        if let Some(scripts) = proxy_scripts {
+            app_router = app_router.merge(scripts);
         }
 
-        // Nothing outside `/static` carries a content hash, so nothing outside
-        // `/static` may be cached.
-        #[cfg(feature = "assets")]
-        {
-            no_cache = no_cache.layer(axum::middleware::from_fn(
-                crate::assets::CacheBuster::never_cache_middleware,
-            ));
-        }
-
-        let mut app_router: Router<WebServerState<S>> = no_cache;
-
-        #[cfg(feature = "assets")]
-        if let Some(directory) = asset_directory.as_ref() {
-            let forever: Router<WebServerState<S>> = Router::new()
-                .nest_service("/static", tower_http::services::ServeDir::new(directory))
-                .layer(axum::middleware::from_fn(
-                    crate::assets::CacheBuster::forever_cache_middleware,
-                ));
-            app_router = app_router.merge(forever);
-        }
-
-        // ── 5. the 404, served in place with a real status ──────────────────
         #[cfg(feature = "pages")]
         let app_router = match not_found {
             Some((page, data)) => app_router.fallback(move |axum::extract::State(state)| {
@@ -410,131 +270,406 @@ where
         #[cfg(not(feature = "pages"))]
         let app_router = app_router.fallback(plain_not_found);
 
-        // ── 6. outer layers ─────────────────────────────────────────────────
-        let service_builder = ServiceBuilder::new()
-            .layer(DefaultBodyLimit::max(body_limit))
+        let state: WebServerState<S> = WebServerState::new(StateParts {
+            host: host.clone(),
+            port,
+            environment,
+            shutdown: shutdown.clone(),
+            #[cfg(feature = "templates")]
+            base,
+            #[cfg(feature = "templates")]
+            templates,
+            cache_buster: Some(cache_buster),
+            #[cfg(feature = "templates")]
+            frontend: frontend_runtime,
+            app,
+        });
+
+        // Applied outermost-last, so the body cap runs before tracing sees a
+        // request it may never finish reading.
+        let app_router = app_router
+            .with_state(state)
             .layer(
                 TraceLayer::new_for_http()
+                    // The span carries the method and URI, and the response
+                    // event is logged inside it. Left at its default DEBUG
+                    // level the span is never created under an INFO filter, so
+                    // every request logs a status and a latency with no way to
+                    // tell which route it was.
                     .make_span_with(
-                        DefaultMakeSpan::default()
+                        DefaultMakeSpan::new()
                             .level(Level::INFO)
                             .include_headers(false),
                     )
                     .on_response(
                         DefaultOnResponse::new()
                             .level(Level::INFO)
-                            .latency_unit(LatencyUnit::Micros),
+                            .latency_unit(LatencyUnit::Millis),
                     ),
-            );
+            )
+            .layer(DefaultBodyLimit::max(body_limit));
 
-        #[cfg(feature = "observability")]
-        let app_router = app_router.with_state(state).layer(
-            service_builder.layer(sentry::integrations::tower::NewSentryLayer::new_from_top()),
-        );
-        #[cfg(not(feature = "observability"))]
-        let app_router = app_router.with_state(state).layer(service_builder);
+        serve_on(app_router, &host, port, shutdown).await
+    }
+}
 
-        // ── 7. bind and serve ───────────────────────────────────────────────
-        let ip: IpAddr = IpAddr::from_str(&host).map_err(|_| {
-            WebServerError::Env(EnvError::Invalid {
-                key: String::from(ENV_HOST),
-                expected: "IP address",
-                value: host.clone(),
-            })
-        })?;
-        let addr: SocketAddr = SocketAddr::new(ip, port);
-
-        let listener: TcpListener = TcpListener::bind(&addr)
+/// Binds and serves until the last connection closes, or the drain window
+/// shuts, whichever comes first.
+async fn serve_on(
+    router: Router,
+    host: &str,
+    port: u16,
+    shutdown: Shutdown,
+) -> Result<(), WebServerError> {
+    let ip: IpAddr = IpAddr::from_str(host).map_err(|source| WebServerError::Bind {
+        addr: SocketAddr::from(([0, 0, 0, 0], port)),
+        source: std::io::Error::new(std::io::ErrorKind::InvalidInput, source),
+    })?;
+    let address: SocketAddr = SocketAddr::new(ip, port);
+    let listener: TcpListener =
+        TcpListener::bind(address)
             .await
-            .map_err(|source| WebServerError::Bind { addr, source })?;
-        info!("listening on http://{addr}");
+            .map_err(|source| WebServerError::Bind {
+                addr: address,
+                source,
+            })?;
 
-        let server = serve(
-            listener,
-            app_router.into_make_service_with_connect_info::<SocketAddr>(),
-        )
-        .with_graceful_shutdown(shutdown.clone().recv());
+    info!("listening on http://{address}");
 
-        tokio::select! {
-            result = server => {
-                result.map_err(WebServerError::Serve)?;
-                info!("{addr} drained cleanly");
-            }
-            () = drain_deadline(shutdown, drain_timeout) => {
-                warn!(
-                    "{addr} did not drain within {drain_timeout:?}; \
-                     stopping with connections still open"
-                );
-            }
+    let serving = serve(
+        listener,
+        router.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown.clone().recv())
+    .into_future();
+    tokio::pin!(serving);
+
+    // The drain window is a ceiling on the wait, not the wait itself, so the
+    // clock cannot start until the drain does — and `serving` resolves the
+    // moment the last connection closes, which for an idle server is at once.
+    tokio::select! {
+        result = &mut serving => return result.map_err(WebServerError::Serve),
+        () = shutdown.recv() => {}
+    }
+
+    match tokio::time::timeout(DEFAULT_DRAIN_TIMEOUT, &mut serving).await {
+        Ok(result) => result.map_err(WebServerError::Serve),
+        // Expected of anything holding a socket open, not a misconfiguration:
+        // the ceiling exists precisely because such a connection never ends.
+        Err(_elapsed) => {
+            warn!("drain window elapsed after {DEFAULT_DRAIN_TIMEOUT:?}; closing what remained");
+            Ok(())
         }
-
-        Ok(())
     }
 }
 
-/// Resolves once shutdown has started and the drain window has elapsed.
-async fn drain_deadline(shutdown: Shutdown, drain_timeout: Duration) {
-    shutdown.recv().await;
-    tokio::time::sleep(drain_timeout).await;
-}
-
-/// `GET {api_prefix}/health`.
-async fn health_check() -> StatusCode {
-    StatusCode::OK
-}
-
-/// The fallback when no 404 page was declared.
-async fn plain_not_found() -> Response {
-    (StatusCode::NOT_FOUND, "not found").into_response()
-}
-
-/// `POST {api_prefix}/scitylana`.
-#[cfg(feature = "analytics")]
-async fn analytics_endpoint<S>(
-    axum::extract::State(state): axum::extract::State<WebServerState<S>>,
-    axum::extract::ConnectInfo(addr): axum::extract::ConnectInfo<SocketAddr>,
-    headers: axum::http::HeaderMap,
-    axum::Form(request): axum::Form<crate::analytics::AnalyticsRequest>,
-) -> StatusCode
-where
-    S: Clone + Send + Sync + 'static,
-{
-    match state.analytics() {
-        Some(handler) => handler.handle(&headers, addr, request).await,
-        None => StatusCode::NOT_FOUND,
-    }
-}
-
-/// Serves the well-known single files from their hashed locations.
-#[cfg(feature = "assets")]
-fn attach_singleton_files<S>(
+/// The two cache policies: nothing outside `/static` may be cached, and
+/// everything inside it is immutable because its URL carries a content hash.
+fn apply_cache_policy<S>(
     router: Router<WebServerState<S>>,
     cache_buster: &crate::assets::CacheBuster,
 ) -> Router<WebServerState<S>>
 where
     S: Clone + Send + Sync + 'static,
 {
+    let router: Router<WebServerState<S>> = router.layer(axum::middleware::from_fn(
+        crate::assets::CacheBuster::never_cache_middleware,
+    ));
+
+    if cache_buster.is_empty() {
+        return router;
+    }
+
+    router.merge(
+        Router::new()
+            .nest_service(
+                "/static",
+                tower_http::services::ServeDir::new(crate::assets::STATIC_DIRECTORY),
+            )
+            .layer(axum::middleware::from_fn(
+                crate::assets::CacheBuster::forever_cache_middleware,
+            )),
+    )
+}
+
+/// `GET /api/v1/health`. Always routed: every deployment target expects one,
+/// and a bool to switch it off was surface for nothing.
+async fn health() -> StatusCode {
+    StatusCode::OK
+}
+
+/// The fallback for a server with no 404 page of its own.
+async fn plain_not_found() -> Response {
+    (StatusCode::NOT_FOUND, "404").into_response()
+}
+
+/// Serves the generated and embedded documents from memory.
+///
+/// None of these is a file. Sitemaps need the route table, so they are built at
+/// boot; `robots.txt` and the manifest are derived from site data; humans.txt is
+/// compiled in. All are served at fixed never-cached routes where a content hash
+/// would mean nothing — which is also why the server needs no writable disk.
+#[cfg(feature = "pages")]
+fn well_known_routes<S>(well_known: &super::frontend::WellKnown) -> Router<WebServerState<S>>
+where
+    S: Clone + Send + Sync + 'static,
+{
+    use axum::http::header;
+
+    fn text<S>(
+        router: Router<WebServerState<S>>,
+        path: &str,
+        content_type: &'static str,
+        body: String,
+    ) -> Router<WebServerState<S>>
+    where
+        S: Clone + Send + Sync + 'static,
+    {
+        router.route(
+            path,
+            get(move || {
+                let body: String = body.clone();
+                async move { ([(header::CONTENT_TYPE, content_type)], body) }
+            }),
+        )
+    }
+
+    let mut router: Router<WebServerState<S>> = Router::new();
+    router = text(
+        router,
+        "/robots.txt",
+        "text/plain; charset=utf-8",
+        well_known.robots_txt.clone(),
+    );
+    router = text(
+        router,
+        "/humans.txt",
+        "text/plain; charset=utf-8",
+        well_known.humans_txt.clone(),
+    );
+    router = text(
+        router,
+        "/site.webmanifest",
+        "application/manifest+json",
+        well_known.webmanifest.clone(),
+    );
+    router = text(
+        router,
+        crate::sitemap::SITEMAP_INDEX_PATH,
+        "application/xml",
+        well_known.sitemaps.index().to_string(),
+    );
+    for (index, chunk) in well_known.sitemaps.chunks().iter().enumerate() {
+        router = text(
+            router,
+            &format!("/sitemap-{}.xml", index + 1),
+            "application/xml",
+            chunk.clone(),
+        );
+    }
+    router
+}
+
+/// Serves the icon set at the well-known root paths browsers actually request.
+///
+/// Each one resolves through the manifest to its hashed file under `/static`,
+/// so the same bytes are reachable both ways: immutable at the hashed URL, and
+/// never-cached here where the URL cannot change.
+#[cfg(feature = "pages")]
+fn icon_routes<S>(
+    cache_buster: &crate::assets::CacheBuster,
+    has_svg_icon: bool,
+) -> Router<WebServerState<S>>
+where
+    S: Clone + Send + Sync + 'static,
+{
     use tower_http::services::ServeFile;
 
-    let directory: &str = cache_buster.asset_directory();
-    let files: [(&str, String); 4] = [
+    let mut icons: Vec<(&str, String)> = vec![
         (
             "/favicon.ico",
-            format!("{directory}/image/favicon/favicon.ico"),
+            String::from("static/image/favicon/favicon.ico"),
         ),
-        ("/robots.txt", format!("{directory}/file/robots.txt")),
-        ("/humans.txt", format!("{directory}/file/humans.txt")),
-        ("/sitemap.xml", format!("{directory}/file/sitemap.xml")),
+        (
+            "/apple-touch-icon.png",
+            String::from("static/image/favicon/apple-touch-icon.png"),
+        ),
+        (
+            "/icon-192.png",
+            String::from("static/image/favicon/icon-192.png"),
+        ),
+        (
+            "/icon-512.png",
+            String::from("static/image/favicon/icon-512.png"),
+        ),
     ];
+    // Only a project whose art is vector has one to serve.
+    if has_svg_icon {
+        icons.push((
+            "/favicon.svg",
+            String::from("static/image/favicon/favicon.svg"),
+        ));
+    }
 
-    let mut router: Router<WebServerState<S>> = router;
-    for (route, original) in files {
+    let mut router: Router<WebServerState<S>> = Router::new();
+    for (route, original) in icons {
+        // Existence was proved at boot, so this is a resolution, not a check.
         let hashed: String = cache_buster.get_file(&original);
-        if !std::path::Path::new(&hashed).exists() {
-            warn!("skipping `{route}`: `{original}` does not exist");
-            continue;
-        }
         router = router.nest_service(route, ServeFile::new(hashed));
     }
     router
+}
+
+/// The first-party proxy routes.
+///
+/// Split in two because the scripts sit at the root — where they read as
+/// ordinary bundler output — while the endpoints they post to belong under the
+/// API prefix.
+#[cfg(feature = "pages")]
+fn proxy_routes<S>(
+    frontend: &super::frontend::Frontend<S>,
+) -> (Router<WebServerState<S>>, Router<WebServerState<S>>)
+where
+    S: Clone + Send + Sync + 'static,
+{
+    use crate::analytics::{AnalyticsConfig, relay_envelope, relay_event, relay_script};
+    use axum::body::Bytes;
+    use axum::extract::ConnectInfo;
+    use axum::http::HeaderMap;
+    use axum::routing::post;
+
+    let client: reqwest::Client = reqwest::Client::new();
+    let paths = &frontend.runtime;
+
+    let analytics_script_upstream: String = frontend.analytics.upstream_script_url();
+    let analytics_event_upstream: String = AnalyticsConfig::upstream_event_url();
+    let sentry_script_upstream: String = frontend.sentry_dsn.upstream_script_url();
+    let sentry_envelope_upstream: String = frontend.sentry_dsn.upstream_envelope_url();
+
+    let scripts: Router<WebServerState<S>> = Router::new()
+        .route(
+            &paths.analytics.script_path,
+            get({
+                let client: reqwest::Client = client.clone();
+                let upstream: std::sync::Arc<str> =
+                    std::sync::Arc::from(analytics_script_upstream.as_str());
+                move || {
+                    let client: reqwest::Client = client.clone();
+                    let upstream: std::sync::Arc<str> = std::sync::Arc::clone(&upstream);
+                    async move { relay_script(&client, &upstream).await }
+                }
+            }),
+        )
+        .route(
+            &paths.sentry_browser.script_path,
+            get({
+                let client: reqwest::Client = client.clone();
+                let upstream: std::sync::Arc<str> =
+                    std::sync::Arc::from(sentry_script_upstream.as_str());
+                move || {
+                    let client: reqwest::Client = client.clone();
+                    let upstream: std::sync::Arc<str> = std::sync::Arc::clone(&upstream);
+                    async move { relay_script(&client, &upstream).await }
+                }
+            }),
+        );
+
+    // Nested under the API prefix, so the paths registered here are relative.
+    let event_path: String = strip_api_prefix(&paths.analytics.event_path);
+    let tunnel_path: String = strip_api_prefix(&paths.sentry_browser.tunnel_path);
+
+    let endpoints: Router<WebServerState<S>> = Router::new()
+        .route(
+            &event_path,
+            post({
+                let client: reqwest::Client = client.clone();
+                let upstream: std::sync::Arc<str> =
+                    std::sync::Arc::from(analytics_event_upstream.as_str());
+                move |ConnectInfo(peer): ConnectInfo<SocketAddr>,
+                      headers: HeaderMap,
+                      body: Bytes| {
+                    let client: reqwest::Client = client.clone();
+                    let upstream: std::sync::Arc<str> = std::sync::Arc::clone(&upstream);
+                    async move { relay_event(&client, &upstream, &headers, peer, body).await }
+                }
+            }),
+        )
+        .route(
+            &tunnel_path,
+            post({
+                let upstream: std::sync::Arc<str> =
+                    std::sync::Arc::from(sentry_envelope_upstream.as_str());
+                move |body: Bytes| {
+                    let client: reqwest::Client = client.clone();
+                    let upstream: std::sync::Arc<str> = std::sync::Arc::clone(&upstream);
+                    async move { relay_envelope(&client, &upstream, body).await }
+                }
+            }),
+        );
+
+    (scripts, endpoints)
+}
+
+/// `/api/v1/thing` → `/thing`, for a router that will be nested under the
+/// prefix.
+#[cfg(feature = "pages")]
+fn strip_api_prefix(path: &str) -> String {
+    path.strip_prefix(API_PREFIX)
+        .map_or_else(|| path.to_string(), String::from)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use axum::Router;
+    use axum::routing::get;
+    use tokio::time::timeout;
+
+    use super::super::shutdown::Shutdown;
+    use super::{API_PREFIX, DEFAULT_BODY_LIMIT, health, serve_on};
+
+    #[tokio::test]
+    async fn a_server_with_nothing_in_flight_stops_at_once_instead_of_waiting_out_the_window() {
+        let shutdown: Shutdown = Shutdown::manual();
+        let router: Router = Router::new().route("/health", get(health));
+
+        // Port 0 asks the OS for a free one; nothing here connects to it.
+        let serving = tokio::spawn({
+            let shutdown: Shutdown = shutdown.clone();
+            async move { serve_on(router, "127.0.0.1", 0, shutdown).await }
+        });
+
+        shutdown.trigger();
+
+        // Far below the drain window: an unconditional wait fails here, which
+        // is the bug — the window is a ceiling, not a delay.
+        timeout(Duration::from_secs(1), serving)
+            .await
+            .expect("the server returned as soon as the drain began")
+            .expect("the serving task did not panic")
+            .expect("serving ended cleanly");
+    }
+
+    #[test]
+    fn the_body_limit_accommodates_an_ordinary_form_post() {
+        // 1 KiB — the previous default — rejected almost any real submission,
+        // so every project had to override it.
+        let expected: usize = 256 * 1024;
+        let actual: usize = DEFAULT_BODY_LIMIT;
+        assert_eq!(expected, actual);
+    }
+
+    #[cfg(feature = "pages")]
+    #[test]
+    fn stripping_the_prefix_leaves_a_nestable_path() {
+        let expected: String = String::from("/boggledygook-a3f2c1d8");
+        let actual: String = super::strip_api_prefix("/api/v1/boggledygook-a3f2c1d8");
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn the_api_prefix_is_the_one_every_project_shares() {
+        assert_eq!("/api/v1", API_PREFIX);
+    }
 }

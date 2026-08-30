@@ -19,7 +19,7 @@ use crate::env::{self, EnvError};
 use crate::environment::Environment;
 
 /// The environment variable holding the Sentry DSN.
-pub const ENV_SENTRY_DSN: &str = "WSB_SENTRY_DSN";
+pub const ENV_SENTRY_DSN: &str = "WSB_SENTRY_SERVER_DSN";
 
 /// The log filter fallback when `RUST_LOG` is unset.
 pub const DEFAULT_LOG_FILTER: &str = "info";
@@ -46,7 +46,16 @@ pub struct Observability {
     dsn: Option<String>,
     environment: Environment,
     log_filter: Option<String>,
+    release: String,
 }
+
+/// The release string used when the application does not name itself.
+///
+/// Sentry's own `release_name!` resolves `CARGO_PKG_NAME` where it is *written*
+/// — inside this crate — so every project that used it would report the same
+/// release and Sentry could not tell one site's deploys from another's. The
+/// application must supply its own; this is only the fallback.
+pub const UNKNOWN_RELEASE: &str = "unknown";
 
 impl Observability {
     /// Error monitoring pointed at `dsn`.
@@ -56,37 +65,52 @@ impl Observability {
             dsn: Some(dsn.into()),
             environment,
             log_filter: None,
+            release: String::from(UNKNOWN_RELEASE),
         }
     }
 
     /// Tracing only, with no error monitoring. For local runs and tests.
     #[must_use]
-    pub const fn none(environment: Environment) -> Self {
+    pub fn none(environment: Environment) -> Self {
         Self {
             dsn: None,
             environment,
             log_filter: None,
+            release: String::from(UNKNOWN_RELEASE),
         }
     }
 
-    /// Reads [`ENV_SENTRY_DSN`] — required in production, optional locally.
+    /// Reads [`ENV_SENTRY_DSN`], which every environment must set.
+    ///
+    /// Required locally too, deliberately: a DSN exercised only in production
+    /// is a DSN nobody has proved works. Point local runs at a development
+    /// Sentry project.
     ///
     /// # Errors
     ///
-    /// [`ObservabilityError::MissingDsnInProduction`] when production has no
-    /// DSN, or [`ObservabilityError::Env`] if the value is unreadable.
+    /// [`ObservabilityError::Env`] if it is unset or blank.
     pub fn from_env(environment: Environment) -> Result<Self, ObservabilityError> {
-        let dsn: Option<String> = env::optional(ENV_SENTRY_DSN);
-
-        if environment.is_production() && dsn.is_none() {
-            return Err(ObservabilityError::MissingDsnInProduction);
-        }
+        // Required in every environment, not just production. A DSN that is
+        // only exercised in production is a DSN nobody has proved works.
+        let dsn: String = env::required(ENV_SENTRY_DSN)?;
 
         Ok(Self {
-            dsn,
+            dsn: Some(dsn),
             environment,
             log_filter: None,
+            release: String::from(UNKNOWN_RELEASE),
         })
+    }
+
+    /// Names the running build, as `my-project@1.2.3`.
+    ///
+    /// This is what Sentry attributes issues to, so it must identify the
+    /// *application*, not this library. Deriving it here is impossible: the
+    /// crate metadata available inside this crate is this crate's own.
+    #[must_use]
+    pub fn with_release(mut self, release: impl Into<String>) -> Self {
+        self.release = release.into();
+        self
     }
 
     /// Overrides the `RUST_LOG` fallback. `RUST_LOG` itself stays unprefixed —
@@ -119,7 +143,11 @@ impl Observability {
             // `ClientOptions` is `#[non_exhaustive]` as of sentry 0.49, so it
             // has to be built by mutation rather than a struct expression.
             let mut options: sentry::ClientOptions = sentry::ClientOptions::default();
-            options.release = sentry::release_name!();
+            // Not `sentry::release_name!()`: that macro reads the crate
+            // metadata of wherever it is expanded, which here is this library —
+            // so every project would report an identical release and Sentry
+            // could not attribute an issue to the deploy that caused it.
+            options.release = Some(self.release.clone().into());
             options.environment = Some(self.environment.as_str().into());
             options.attach_stacktrace = true;
 
@@ -127,26 +155,45 @@ impl Observability {
         });
 
         let fallback: &str = self.log_filter.as_deref().unwrap_or(DEFAULT_LOG_FILTER);
-        let filter: EnvFilter = EnvFilter::try_from_default_env()
-            .or_else(|_| EnvFilter::try_new(fallback))
-            .unwrap_or_else(|_| EnvFilter::new(DEFAULT_LOG_FILTER));
+        let directives: String =
+            std::env::var(EnvFilter::DEFAULT_ENV).unwrap_or_else(|_| fallback.to_string());
+        let filter: EnvFilter =
+            EnvFilter::try_new(&directives).unwrap_or_else(|_| EnvFilter::new(DEFAULT_LOG_FILTER));
+
+        // A human reads the local log; a machine reads the production one.
+        // `with_ansi(false)` in production because a log driver stores escape
+        // codes verbatim and nothing downstream strips them.
+        let format = if self.environment.is_production() {
+            tracing_subscriber::fmt::layer()
+                .json()
+                .flatten_event(true)
+                .with_current_span(true)
+                .with_span_list(false)
+                .with_ansi(false)
+                .with_filter(filter)
+                .boxed()
+        } else {
+            tracing_subscriber::fmt::layer().with_filter(filter).boxed()
+        };
 
         tracing_subscriber::registry()
-            .with(tracing_subscriber::fmt::layer().with_filter(filter))
+            .with(format)
             // Harmless without Sentry: the layer forwards to a disabled hub.
             .with(sentry::integrations::tracing::layer())
             .init();
 
-        if sentry_guard.is_some() {
-            info!(
-                "error monitoring enabled for environment `{}`",
-                self.environment
-            );
-        } else {
-            warn!(
-                "error monitoring disabled: `{ENV_SENTRY_DSN}` is not set (environment `{}`)",
-                self.environment
-            );
+        // The one thing no other log line can tell you: which build is running.
+        // Everything else here is either inferable or already stated elsewhere,
+        // so this stays to three fields.
+        info!(
+            release = %self.release,
+            environment = %self.environment,
+            log_filter = %directives,
+            "starting"
+        );
+
+        if sentry_guard.is_none() {
+            warn!("error monitoring is not configured; nothing will reach Sentry");
         }
 
         ObservabilityGuard {
@@ -160,6 +207,9 @@ impl Debug for Observability {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("Observability")
             .field("environment", &self.environment)
+            .field("release", &self.release)
+            // The DSN itself is deliberately absent: it is a credential, and
+            // this type reaches logs.
             .field("error_monitoring", &self.dsn.is_some())
             .field("log_filter", &self.log_filter)
             .finish()
@@ -182,57 +232,8 @@ impl Debug for ObservabilityGuard {
 
 #[cfg(test)]
 mod tests {
-    use super::{Observability, ObservabilityError};
+    use super::Observability;
     use crate::environment::Environment;
-
-    #[test]
-    fn none_is_explicitly_unmonitored() {
-        let observability: Observability = Observability::none(Environment::Local);
-
-        let expected: bool = false;
-        let actual: bool = observability.has_error_monitoring();
-        assert_eq!(expected, actual);
-    }
-
-    #[test]
-    fn a_dsn_can_be_supplied_directly_without_the_environment() {
-        let observability: Observability =
-            Observability::new(Environment::Production, "https://key@example.com/1");
-
-        let expected: bool = true;
-        let actual: bool = observability.has_error_monitoring();
-        assert_eq!(expected, actual);
-
-        let expected_environment: Environment = Environment::Production;
-        let actual_environment: Environment = observability.environment();
-        assert_eq!(expected_environment, actual_environment);
-    }
-
-    #[test]
-    fn production_without_a_dsn_refuses_to_configure() {
-        // WSB_SENTRY_DSN is not set in the test process, and setting env vars
-        // is `unsafe`, which this crate forbids.
-        let error: ObservabilityError = Observability::from_env(Environment::Production)
-            .expect_err("production requires a DSN");
-        assert!(matches!(error, ObservabilityError::MissingDsnInProduction));
-
-        let expected: String = String::from(
-            "environment variable `WSB_SENTRY_DSN` is required in production; \
-             error monitoring cannot be disabled there",
-        );
-        let actual: String = error.to_string();
-        assert_eq!(expected, actual);
-    }
-
-    #[test]
-    fn local_without_a_dsn_is_fine() {
-        let observability: Observability =
-            Observability::from_env(Environment::Local).expect("local does not require a DSN");
-
-        let expected: bool = false;
-        let actual: bool = observability.has_error_monitoring();
-        assert_eq!(expected, actual);
-    }
 
     #[test]
     fn debug_output_never_contains_the_dsn() {

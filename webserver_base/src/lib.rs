@@ -7,13 +7,12 @@
 //!
 //! | feature | what it is |
 //! |---|---|
-//! | `assets` | content-hashed static files, cache-control middleware |
-//! | `templates` | Handlebars registry and the three template-data types |
-//! | `analytics` | Plausible event forwarding with true-client-IP resolution |
-//! | `sitemap` | `sitemap.xml` generation |
+//! | `templates` | Handlebars registry, the embedded base layout, template data |
+//! | `analytics` | first-party proxies for Plausible and the Sentry browser SDK |
+//! | `sitemap` | sitemap index and url-set generation |
 //! | `observability` | Sentry + tracing, initialised in the one order that works |
 //! | `telegram` | outbound Telegram Bot API notifier |
-//! | `webserver` | the server builder, shared state, bootstrap, graceful shutdown |
+//! | `webserver` | the server builder, state, bootstrap, static-asset pipeline |
 //! | `pages` | page declarations that produce routes *and* sitemap entries |
 //! | `preset` | Todd Everett Griffin's personal defaults |
 //! | `full` | all of the above |
@@ -31,7 +30,7 @@ pub use environment::{ENV_ENVIRONMENT, Environment, EnvironmentParseError};
 
 #[cfg(feature = "analytics")]
 pub mod analytics;
-#[cfg(feature = "assets")]
+#[cfg(feature = "webserver")]
 pub mod assets;
 #[cfg(feature = "observability")]
 pub mod observability;
@@ -45,4 +44,4 @@ pub mod templates;
 pub mod webserver;
 
 #[cfg(feature = "webserver")]
-pub use webserver::{Shutdown, WebServer, WebServerError, WebServerState, bootstrap};
+pub use webserver::{Shutdown, WebServer, WebServerError, WebServerState, bootstrap_with_release};

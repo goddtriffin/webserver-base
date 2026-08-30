@@ -13,7 +13,7 @@ use crate::env::EnvError;
 /// Composed from the per-kit errors rather than replacing them: a crate on only
 /// `telegram` sees [`TelegramError`](crate::telegram::TelegramError) and never
 /// this type. Deliberately not `#[non_exhaustive]`.
-#[derive(Debug, thiserror::Error)]
+#[derive(thiserror::Error)]
 pub enum WebServerError {
     /// A required environment variable was missing or malformed.
     #[error(transparent)]
@@ -26,6 +26,11 @@ pub enum WebServerError {
         #[source]
         source: std::io::Error,
     },
+
+    /// The browser Sentry DSN could not be parsed.
+    #[cfg(feature = "analytics")]
+    #[error("the browser Sentry DSN is malformed")]
+    SentryDsn(#[from] crate::analytics::SentryDsnParseError),
 
     /// The server stopped with an error rather than a shutdown.
     #[error("the server stopped unexpectedly")]
@@ -42,7 +47,7 @@ pub enum WebServerError {
     TemplatesNotConfigured,
 
     /// The asset cache could not be built.
-    #[cfg(feature = "assets")]
+    #[cfg(feature = "webserver")]
     #[error(transparent)]
     CacheBuster(#[from] crate::assets::CacheBusterError),
 
@@ -77,5 +82,26 @@ impl IntoResponse for WebServerError {
     fn into_response(self) -> Response {
         error!("request failed: {self}");
         (StatusCode::INTERNAL_SERVER_ERROR, "internal server error").into_response()
+    }
+}
+
+/// Renders the whole error chain, not the enum's shape.
+///
+/// `main` returning a `Result` prints its error with `Debug`, so a derived one
+/// would surface `CacheBuster(AmbiguousFavicon)` — the variant name — and throw
+/// away the sentence that says what to do about it. Every message in this crate
+/// is written for a human who has just had a boot fail; this is what makes them
+/// visible.
+impl std::fmt::Debug for WebServerError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "{self}")?;
+
+        let mut source: Option<&(dyn std::error::Error + 'static)> =
+            std::error::Error::source(self);
+        while let Some(error) = source {
+            writeln!(f, "  caused by: {error}")?;
+            source = error.source();
+        }
+        Ok(())
     }
 }

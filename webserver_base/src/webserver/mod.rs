@@ -9,16 +9,18 @@
 mod bootstrap;
 mod error;
 #[cfg(feature = "pages")]
+mod frontend;
+#[cfg(feature = "pages")]
 mod pages;
 mod server;
 mod shutdown;
 mod state;
 
-pub use bootstrap::bootstrap;
+pub use bootstrap::bootstrap_with_release;
 pub use error::WebServerError;
-pub use server::{
-    DEFAULT_API_PREFIX, DEFAULT_BODY_LIMIT, DEFAULT_PORT, ENV_HOST, ENV_PORT, WebServer,
-};
+#[cfg(feature = "pages")]
+pub use frontend::{Frontend, FrontendParams, WellKnown};
+pub use server::{API_PREFIX, DEFAULT_BODY_LIMIT, DEFAULT_PORT, ENV_HOST, ENV_PORT, WebServer};
 pub use shutdown::{DEFAULT_DRAIN_TIMEOUT, Shutdown};
 pub use state::WebServerState;
 

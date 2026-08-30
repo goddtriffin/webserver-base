@@ -14,7 +14,6 @@ use axum::routing::{MethodRouter, get};
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use serde_json::Value;
-use sitemap_rs::url::ChangeFrequency;
 use tracing::error;
 
 use crate::sitemap::SitemapUrl;
@@ -51,7 +50,6 @@ struct PageEntry<S> {
 #[derive(Default)]
 pub struct Pages<S = ()> {
     entries: Vec<PageEntry<S>>,
-    not_found: Option<(Arc<PageTemplateData>, Arc<Value>)>,
 }
 
 impl<S> Pages<S>
@@ -63,7 +61,6 @@ where
     pub fn new() -> Self {
         Self {
             entries: Vec::new(),
-            not_found: None,
         }
     }
 
@@ -137,46 +134,12 @@ where
         self
     }
 
-    /// The page served for any URL that matches nothing.
-    ///
-    /// Rendered at the requested URL with a real `404`, never as a redirect to
-    /// `/404` — a redirect to a page answering `200` is a soft 404, and it
-    /// hides the URL that was actually broken.
-    ///
-    /// # Panics
-    ///
-    /// If `data` cannot be serialized.
-    #[must_use]
-    pub fn not_found<A>(mut self, page: PageTemplateData, data: A) -> Self
-    where
-        A: Serialize,
-    {
-        let value: Value = serde_json::to_value(data)
-            .unwrap_or_else(|error| panic!("the 404 page has unserializable data: {error}"));
-        self.not_found = Some((Arc::new(page), Arc::new(value)));
-        self
-    }
-
     /// Keeps the most recently declared page out of the sitemap.
     #[must_use]
     pub fn unlisted(mut self) -> Self {
         if let Some(entry) = self.entries.last_mut() {
             entry.listing = Listing::Unlisted;
         }
-        self
-    }
-
-    /// Sets `<changefreq>` on the most recently declared page.
-    #[must_use]
-    pub fn with_change_frequency(mut self, change_frequency: ChangeFrequency) -> Self {
-        self.map_last_urls(|url| url.with_change_frequency(change_frequency));
-        self
-    }
-
-    /// Sets `<priority>` on the most recently declared page.
-    #[must_use]
-    pub fn with_priority(mut self, priority: f32) -> Self {
-        self.map_last_urls(|url| url.with_priority(priority));
         self
     }
 
@@ -230,6 +193,28 @@ where
     ///
     /// [`WebServerError::DynamicPagePathHasParameters`] if a listed page's path
     /// contains a route parameter, which cannot be resolved to one URL.
+    /// Every asset path the declared pages reference.
+    ///
+    /// Static pages only: a dynamic page builds its `PageTemplateData` per
+    /// request, so there is nothing to inspect at boot.
+    #[must_use]
+    pub fn declared_assets(&self) -> Vec<String> {
+        self.entries
+            .iter()
+            .filter_map(|entry| match &entry.kind {
+                PageKind::Static { page, .. } => Some(page.declared_assets()),
+                PageKind::Dynamic(_) => None,
+            })
+            .flatten()
+            .collect()
+    }
+
+    /// Every listed page as a sitemap entry.
+    ///
+    /// # Errors
+    ///
+    /// [`WebServerError::DynamicPagePathHasParameters`] if a listed page's path
+    /// contains a route parameter, which cannot become a single sitemap URL.
     pub fn sitemap_urls(&self) -> Result<Vec<SitemapUrl>, WebServerError> {
         let mut urls: Vec<SitemapUrl> = Vec::new();
 
@@ -251,12 +236,6 @@ where
     }
 
     /// The 404 declaration, if one was made.
-    pub(super) fn not_found_page(&self) -> Option<(Arc<PageTemplateData>, Arc<Value>)> {
-        self.not_found
-            .as_ref()
-            .map(|(page, data)| (Arc::clone(page), Arc::clone(data)))
-    }
-
     /// Turns every declaration into routes.
     pub(super) fn into_router(self) -> axum::Router<WebServerState<S>> {
         let mut router: axum::Router<WebServerState<S>> = axum::Router::new();
@@ -310,7 +289,8 @@ fn has_route_parameter(path: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use sitemap_rs::url::ChangeFrequency;
+
+    use chrono::TimeZone;
 
     use crate::sitemap::SitemapUrl;
     use crate::templates::PageTemplateData;
@@ -410,20 +390,20 @@ mod tests {
 
     #[test]
     fn sitemap_modifiers_apply_to_the_page_just_declared() {
+        let modified = chrono::Utc
+            .with_ymd_and_hms(2026, 3, 4, 5, 6, 7)
+            .single()
+            .expect("a real instant");
+
         let pages: Pages = Pages::new()
             .static_page(PageTemplateData::new("home", "Home", "/"), ())
             .static_page(PageTemplateData::new("blog", "Blog", "/blog"), ())
-            .with_change_frequency(ChangeFrequency::Monthly);
+            .with_last_modified(modified);
 
         let urls: Vec<SitemapUrl> = pages.sitemap_urls().expect("no parameters");
 
-        let expected_untouched: String = ChangeFrequency::Weekly.to_string();
-        let actual_untouched: String = urls[0].change_frequency().to_string();
-        assert_eq!(expected_untouched, actual_untouched);
-
-        let expected_modified: String = ChangeFrequency::Monthly.to_string();
-        let actual_modified: String = urls[1].change_frequency().to_string();
-        assert_eq!(expected_modified, actual_modified);
+        assert_eq!(None, urls[0].last_modified());
+        assert_eq!(Some(modified), urls[1].last_modified());
 
         let expected_path: String = String::from("/blog");
         let actual_path: String = urls[1].path().to_string();
@@ -457,10 +437,25 @@ mod tests {
     }
 
     #[test]
-    fn a_declaration_can_carry_no_404_at_all() {
+    fn a_declaration_starts_empty() {
         let pages: Pages = Pages::new();
 
-        assert!(pages.is_empty());
-        assert!(pages.not_found_page().is_none());
+        let expected: bool = true;
+        let actual: bool = pages.is_empty();
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn declared_assets_are_collected_from_static_pages_for_boot_validation() {
+        let pages: Pages = Pages::new().static_page(
+            PageTemplateData::new("blog", "Blog", "/blog")
+                .extend_style_sheets(["static/stylesheet/blog.css"])
+                .with_social_image("static/image/social/blog.webp"),
+            (),
+        );
+
+        let declared: Vec<String> = pages.declared_assets();
+        assert!(declared.contains(&String::from("static/stylesheet/blog.css")));
+        assert!(declared.contains(&String::from("static/image/social/blog.webp")));
     }
 }

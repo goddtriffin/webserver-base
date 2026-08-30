@@ -15,6 +15,29 @@ pub enum TemplateError {
         source: std::io::Error,
     },
 
+    /// A project supplied a template whose name this crate owns.
+    #[error(
+        "`{path}` shadows the built-in `{name}` layout, which webserver-base \
+         embeds and every page extends. Rename it — a project may add any other \
+         layout, just not this one."
+    )]
+    ReservedName { name: &'static str, path: PathBuf },
+
+    /// A frontend was declared with no page templates to serve.
+    #[error(
+        "`{path}` contains no `.hbs` pages. A frontend must serve at least one \
+         page; add `html/pages/home.hbs`."
+    )]
+    NoPages { path: PathBuf },
+
+    /// A frontend has no 404 template.
+    #[error(
+        "`{path}` is missing. Every frontend serves a 404, and its data is the \
+         same everywhere, so the library declares it — but the page itself is \
+         yours to design."
+    )]
+    MissingNotFoundPage { path: PathBuf },
+
     /// A template file failed to compile.
     #[error("failed to compile template `{name}`")]
     Compile {
