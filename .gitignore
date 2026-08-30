@@ -8,3 +8,9 @@ docs/
 # files
 .DS_Store
 .template-web-server.env
+
+# Static-asset build output. Produced by `make gen_static_assets` before
+# anything reads it, so there is no bootstrap reason to commit either — and a
+# stale committed copy could silently feed the JS build.
+cache-buster.json
+static/script/generated/

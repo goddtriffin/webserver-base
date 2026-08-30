@@ -3,7 +3,7 @@ members = ["webserver_base", "template_web_server"]
 resolver = "2"
 
 [workspace.package]
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 rust-version = "1.98"
 authors = ["Todd Everett Griffin <tgriffin115@gmail.com>"]
@@ -14,7 +14,17 @@ description = "A Rust library which contains shared logic for all of my webserve
 license-file = "LICENSE"
 keywords = ["Todd", "Everett", "Griffin", "webserver", "base"]
 categories = ["web-programming"]
-include = ["**/*.rs", "Cargo.toml", ".clippy.toml", "LICENSE", "README.md"]
+# `assets/**` is load-bearing: the base layout and humans.txt are pulled in with
+# `include_str!`, so omitting them here compiles locally and fails for every
+# consumer of the published crate.
+include = [
+  "**/*.rs",
+  "assets/**",
+  "Cargo.toml",
+  ".clippy.toml",
+  "LICENSE",
+  "README.md",
+]
 
 [workspace.lints.rust]
 unsafe_code = { level = "forbid", priority = 0 }
@@ -55,7 +65,7 @@ reqwest = { version = "0.13.4", default-features = false, features = [
 
 # tracing
 tracing = "0.1.44"
-tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
 
 # serde
 serde = { version = "1.0.229", features = ["derive"] }
@@ -79,6 +89,15 @@ sentry = { version = "0.49.1", default-features = false, features = [
 # crypto
 md5 = "0.8.1"
 
+# static assets: SVG -> raster for the generated icon set. `resvg` re-exports
+# both `usvg` (parse) and `tiny_skia` (pixels), so it is the only name needed.
+# Default features off: no system fonts, so a favicon.svg must carry paths
+# rather than text.
+resvg = { version = "0.45.1", default-features = false, features = ["text"] }
+
+# static assets: reads image dimensions from header bytes, for og:image:width.
+imagesize = "0.15.0"
+
 # sitemap
 sitemap-rs = "0.4.0"
 xml-builder = "0.5.4"
@@ -89,6 +108,3 @@ handlebars = "6.4.4"
 
 # regex
 regex = "1.13.1"
-
-# my homebrew libraries
-plausible-rs = "0.1.5"

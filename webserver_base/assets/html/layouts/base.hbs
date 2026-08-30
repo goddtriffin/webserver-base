@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="{{language_code}}-{{country_code}}">
+
+<head>
+  {{! Charset first: the spec wants it inside the first 1024 bytes, and putting
+      it at position one means no amount of growth below can ever push it out. }}
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  {{! The two highest-weight signals for search engines and LLM crawlers alike,
+      as high in the document as they can go. }}
+  <title>{{display_name}}</title>
+  <meta name="description" content="{{description}}">
+
+  {{! Discovery }}
+  <meta name="robots" content="{{robots}}">
+  <link rel="canonical" href="{{canonical_url}}">
+  <meta name="author" content="{{author}}">
+  <meta name="application-name" content="{{project}}">
+  <link type="text/plain" rel="author" href="{{base_url}}/humans.txt">
+
+  {{! Colour scheme. `color-scheme` makes form controls, scrollbars and the
+      pre-CSS default background match the theme; `theme-color` tints browser
+      chrome. Both are declared before any stylesheet so they apply on the
+      first paint rather than after it. }}
+  <meta name="color-scheme" content="{{color_scheme}}">
+  {{#each theme_colors}}
+  <meta name="theme-color" content="{{this.content}}"{{#if this.media}} media="{{this.media}}"{{/if}}>
+  {{/each}}
+
+  {{! Open Graph — https://ogp.me/
+      Read by Facebook, LinkedIn, Slack, Discord, iMessage, WhatsApp, Telegram
+      and Signal. `og:image` is absolute because a crawler fetching this page in
+      isolation has no idea what the origin is. }}
+  <meta property="og:type" content="{{og_type}}">
+  <meta property="og:title" content="{{display_name}}">
+  <meta property="og:description" content="{{description}}">
+  <meta property="og:url" content="{{canonical_url}}">
+  <meta property="og:site_name" content="{{project}}">
+  <meta property="og:locale" content="{{locale}}">
+  <meta property="og:image" content="{{social_image_url}}">
+  <meta property="og:image:alt" content="{{social_image_alt}}">
+  {{#if social_image_type}}
+  <meta property="og:image:type" content="{{social_image_type}}">
+  {{/if}}
+  {{#if social_image_width}}
+  <meta property="og:image:width" content="{{social_image_width}}">
+  <meta property="og:image:height" content="{{social_image_height}}">
+  {{/if}}
+  {{#each see_also}}
+  <meta property="og:see_also" content="{{this}}">
+  {{/each}}
+  {{#if article}}
+  <meta property="article:published_time" content="{{article.published_time}}">
+  {{#if article.modified_time}}
+  <meta property="article:modified_time" content="{{article.modified_time}}">
+  {{/if}}
+  <meta property="article:author" content="{{author}}">
+  {{#if article.section}}
+  <meta property="article:section" content="{{article.section}}">
+  {{/if}}
+  {{#each article.tags}}
+  <meta property="article:tag" content="{{this}}">
+  {{/each}}
+  {{/if}}
+
+  {{! X/Twitter. Only the four tags with no Open Graph equivalent: the card
+      processor falls back to og:title, og:description, og:image and og:url. }}
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:site" content="@{{twitter_username}}">
+  <meta name="twitter:creator" content="@{{twitter_username}}">
+  <meta name="twitter:image:alt" content="{{social_image_alt}}">
+
+  {{! Icons. A project authors one source — `favicon.svg`, or a 512x512
+      `favicon-512.png` when the art is a photograph and cannot be vectorised — and
+      the rest are generated from it at build time. The SVG link appears only
+      when there is an SVG: a vector source additionally carries its own
+      prefers-color-scheme rules, so the tab icon follows the OS theme. }}
+  {{#if has_svg_icon}}
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  {{/if}}
+  <link rel="icon" href="/favicon.ico" sizes="32x32">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+
+  {{! Schema.org, escaped by the framework so it cannot break out of this block.
+      Emitted on the home page by default; other pages only when they supply
+      one, because Google requires WebSite/Organization markup to live on the
+      site root. }}
+  {{#if jsonld}}
+  <script type="application/ld+json">{{{jsonld}}}</script>
+  {{/if}}
+
+  {{! Theme resolution, before first paint, so the page never flashes the wrong
+      theme. An explicit choice is stamped; an OS preference is deliberately NOT
+      stamped, so the stylesheet's media queries stay reactive and follow the OS
+      when it changes mid-session. }}
+  <script>{{{theme_script}}}</script>
+
+  {{! Resource hints for every distinct cross-origin host referenced below,
+      derived from the stylesheet and script lists rather than configured. }}
+  {{#each preconnect}}
+  <link rel="preconnect" href="{{this}}" crossorigin>
+  {{/each}}
+
+  {{#if analytics}}
+  {{! Privacy-friendly analytics, proxied through this origin so it is
+      indistinguishable from the site's own assets. }}
+  <script defer src="{{analytics.script_path}}"></script>
+  <script>
+    window.plausible = window.plausible || function () { (plausible.q = plausible.q || []).push(arguments) };
+    plausible.init = plausible.init || function (i) { plausible.o = i || {} };
+    plausible.init({ endpoint: "{{analytics.event_path}}" });
+  </script>
+  {{/if}}
+
+  {{#if sentry_browser}}
+  {{! Browser error monitoring. `tunnel` routes envelopes back through this
+      origin; the server relays them verbatim, so Sentry receives a genuine
+      browser event rather than a server-side re-report. }}
+  <script>
+    window.sentryOnLoad = function () {
+      Sentry.init({ environment: "{{sentry_browser.environment}}", tunnel: "{{sentry_browser.tunnel_path}}" });
+    };
+  </script>
+  <script src="{{sentry_browser.script_path}}" crossorigin="anonymous"></script>
+  {{/if}}
+
+  {{! Style Sheets }}
+  {{#each style_sheets}}
+  {{#if (has_key ../cache_buster this)}}
+  <link rel="stylesheet" href="/{{lookup ../cache_buster this}}">
+  {{else}}
+  <link rel="stylesheet" href="{{this}}">
+  {{/if}}
+  {{/each}}
+</head>
+
+<body>
+  {{> body}}
+
+  {{! Scripts }}
+  {{#each scripts}}
+  {{#if (has_key ../cache_buster this)}}
+  <script type="module" src="/{{lookup ../cache_buster this}}"></script>
+  {{else}}
+  <script type="module" src="{{this}}"></script>
+  {{/if}}
+  {{/each}}
+</body>
+
+</html>

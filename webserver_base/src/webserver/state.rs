@@ -49,10 +49,10 @@ struct Inner<S> {
     base: Option<BaseTemplateData>,
     #[cfg(feature = "templates")]
     templates: Option<TemplateRegistry<'static>>,
-    #[cfg(feature = "assets")]
+    #[cfg(feature = "webserver")]
     cache_buster: Option<crate::assets::CacheBuster>,
-    #[cfg(feature = "analytics")]
-    analytics: Option<Arc<crate::analytics::AnalyticsHandler>>,
+    #[cfg(feature = "templates")]
+    frontend: Option<crate::templates::FrontendRuntime>,
 
     app: S,
 }
@@ -67,10 +67,10 @@ pub(super) struct StateParts<S> {
     pub(super) base: Option<BaseTemplateData>,
     #[cfg(feature = "templates")]
     pub(super) templates: Option<TemplateRegistry<'static>>,
-    #[cfg(feature = "assets")]
+    #[cfg(feature = "webserver")]
     pub(super) cache_buster: Option<crate::assets::CacheBuster>,
-    #[cfg(feature = "analytics")]
-    pub(super) analytics: Option<Arc<crate::analytics::AnalyticsHandler>>,
+    #[cfg(feature = "templates")]
+    pub(super) frontend: Option<crate::templates::FrontendRuntime>,
     pub(super) app: S,
 }
 
@@ -85,10 +85,10 @@ impl<S> WebServerState<S> {
             base: parts.base,
             #[cfg(feature = "templates")]
             templates: parts.templates,
-            #[cfg(feature = "assets")]
+            #[cfg(feature = "webserver")]
             cache_buster: parts.cache_buster,
-            #[cfg(feature = "analytics")]
-            analytics: parts.analytics,
+            #[cfg(feature = "templates")]
+            frontend: parts.frontend,
             app: parts.app,
         }))
     }
@@ -147,7 +147,7 @@ impl<S> WebServerState<S> {
     }
 
     /// The asset cache, if `.assets(..)` was called.
-    #[cfg(feature = "assets")]
+    #[cfg(feature = "webserver")]
     #[must_use]
     pub fn cache_buster(&self) -> Option<&crate::assets::CacheBuster> {
         self.0.cache_buster.as_ref()
@@ -155,7 +155,7 @@ impl<S> WebServerState<S> {
 
     /// The content-hashed path for an asset, or the original path when the
     /// `assets` kit is not in use.
-    #[cfg(feature = "assets")]
+    #[cfg(feature = "webserver")]
     #[must_use]
     pub fn asset(&self, original_asset_file_path: &str) -> String {
         self.0.cache_buster.as_ref().map_or_else(
@@ -164,11 +164,11 @@ impl<S> WebServerState<S> {
         )
     }
 
-    /// The analytics handler, if `.analytics(..)` was called.
-    #[cfg(feature = "analytics")]
+    /// The per-server frontend data, if `.frontend(..)` was called.
+    #[cfg(feature = "templates")]
     #[must_use]
-    pub fn analytics(&self) -> Option<&crate::analytics::AnalyticsHandler> {
-        self.0.analytics.as_deref()
+    pub fn frontend_runtime(&self) -> Option<&crate::templates::FrontendRuntime> {
+        self.0.frontend.as_ref()
     }
 
     /// Renders `page` with `data` as its `{{app}}`. Pass `()` for none.
@@ -193,6 +193,7 @@ impl<S> WebServerState<S> {
         let template_data: TemplateData<'_, A> = TemplateData::assemble(
             base,
             page,
+            self.0.frontend.as_ref(),
             self.0.environment,
             self.cache_buster_map(),
             data,
@@ -204,14 +205,14 @@ impl<S> WebServerState<S> {
     /// The asset map, empty when the `assets` kit is off.
     #[cfg(feature = "templates")]
     fn cache_buster_map(&self) -> &BTreeMap<String, String> {
-        #[cfg(feature = "assets")]
+        #[cfg(feature = "webserver")]
         {
             self.0
                 .cache_buster
                 .as_ref()
                 .map_or(&NO_CACHE_BUSTER, crate::assets::CacheBuster::cache)
         }
-        #[cfg(not(feature = "assets"))]
+        #[cfg(not(feature = "webserver"))]
         {
             &NO_CACHE_BUSTER
         }

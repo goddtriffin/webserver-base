@@ -1,8 +1,66 @@
 //! Per-render template data: what this page is, this time.
 
+use chrono::{DateTime, Utc};
+use serde::Serialize;
 use serde_json::Value;
 
 use super::robots;
+
+/// Article metadata, for a page that is a piece of writing rather than a part
+/// of the site.
+///
+/// Supplying this is what makes a page an `article`: `og:type` is derived from
+/// its presence, so a page cannot claim to be an article without dates, nor
+/// carry dates that never reach the markup.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Article {
+    /// When the piece was first published.
+    pub published_time: DateTime<Utc>,
+    /// When it was last meaningfully revised, if ever.
+    pub modified_time: Option<DateTime<Utc>>,
+    /// The section it belongs to, e.g. `Engineering`.
+    pub section: Option<String>,
+    /// Free-form tags.
+    pub tags: Vec<String>,
+}
+
+impl Article {
+    /// An article published at `published_time`, with nothing else set.
+    #[must_use]
+    pub const fn new(published_time: DateTime<Utc>) -> Self {
+        Self {
+            published_time,
+            modified_time: None,
+            section: None,
+            tags: Vec::new(),
+        }
+    }
+
+    /// Records a revision date.
+    #[must_use]
+    pub const fn with_modified_time(mut self, modified_time: DateTime<Utc>) -> Self {
+        self.modified_time = Some(modified_time);
+        self
+    }
+
+    /// Sets the section.
+    #[must_use]
+    pub fn with_section(mut self, section: impl Into<String>) -> Self {
+        self.section = Some(section.into());
+        self
+    }
+
+    /// Adds tags.
+    #[must_use]
+    pub fn extend_tags<I, S>(mut self, tags: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        self.tags.extend(tags.into_iter().map(Into::into));
+        self
+    }
+}
 
 /// Per-render template data.
 ///
@@ -16,11 +74,11 @@ pub struct PageTemplateData {
     page_url: String,
 
     description: Option<String>,
-    keywords: Option<Vec<String>>,
     social_image: Option<String>,
     social_image_alt: Option<String>,
     robots: Option<String>,
     jsonld: Option<Value>,
+    article: Option<Article>,
 
     style_sheets: Option<Vec<String>>,
     scripts: Option<Vec<String>>,
@@ -48,11 +106,11 @@ impl PageTemplateData {
             page_name: page_name.into(),
             page_url: normalize_page_url(&page_url.into()),
             description: None,
-            keywords: None,
             social_image: None,
             social_image_alt: None,
             robots: None,
             jsonld: None,
+            article: None,
             style_sheets: None,
             scripts: None,
             extra_style_sheets: Vec::new(),
@@ -64,17 +122,6 @@ impl PageTemplateData {
     #[must_use]
     pub fn with_description(mut self, description: impl Into<String>) -> Self {
         self.description = Some(description.into());
-        self
-    }
-
-    /// Overrides the base keywords for this page.
-    #[must_use]
-    pub fn with_keywords<I, S>(mut self, keywords: I) -> Self
-    where
-        I: IntoIterator<Item = S>,
-        S: Into<String>,
-    {
-        self.keywords = Some(keywords.into_iter().map(Into::into).collect());
         self
     }
 
@@ -108,6 +155,16 @@ impl PageTemplateData {
     #[must_use]
     pub fn with_jsonld(mut self, jsonld: Value) -> Self {
         self.jsonld = Some(jsonld);
+        self
+    }
+
+    /// Marks this page as an article and attaches its metadata.
+    ///
+    /// This is the only way to set `og:type` to `article`, so the type and the
+    /// `article:*` tags can never disagree.
+    #[must_use]
+    pub fn with_article(mut self, article: Article) -> Self {
+        self.article = Some(article);
         self
     }
 
@@ -177,11 +234,6 @@ impl PageTemplateData {
     pub fn description(&self) -> Option<&str> {
         self.description.as_deref()
     }
-    /// This page's keywords override, if any.
-    #[must_use]
-    pub fn keywords(&self) -> Option<&[String]> {
-        self.keywords.as_deref()
-    }
     /// This page's social image override, if any.
     #[must_use]
     pub fn social_image(&self) -> Option<&str> {
@@ -201,6 +253,41 @@ impl PageTemplateData {
     #[must_use]
     pub const fn jsonld(&self) -> Option<&Value> {
         self.jsonld.as_ref()
+    }
+    /// This page's article metadata, if it is one.
+    #[must_use]
+    pub const fn article(&self) -> Option<&Article> {
+        self.article.as_ref()
+    }
+    /// The Open Graph object type, derived from whether this page is an article.
+    #[must_use]
+    pub const fn og_type(&self) -> &'static str {
+        if self.article.is_some() {
+            "article"
+        } else {
+            "website"
+        }
+    }
+
+    /// Every asset path this page declares for itself.
+    ///
+    /// Boot-time validation walks these so a typo in a page-specific stylesheet
+    /// fails the deploy rather than silently 404ing for a visitor.
+    #[must_use]
+    pub fn declared_assets(&self) -> Vec<String> {
+        let mut declared: Vec<String> = Vec::new();
+        for list in [self.style_sheets.as_deref(), self.scripts.as_deref()]
+            .into_iter()
+            .flatten()
+        {
+            declared.extend(list.iter().cloned());
+        }
+        declared.extend(self.extra_style_sheets.iter().cloned());
+        declared.extend(self.extra_scripts.iter().cloned());
+        if let Some(social_image) = self.social_image.as_deref() {
+            declared.push(social_image.to_string());
+        }
+        declared
     }
 
     /// Resolves the final stylesheet list: base, optionally replaced, then
@@ -249,9 +336,10 @@ fn normalize_page_url(page_url: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use chrono::{DateTime, TimeZone, Utc};
     use serde_json::json;
 
-    use super::{PageTemplateData, normalize_page_url};
+    use super::{Article, PageTemplateData, normalize_page_url};
     use crate::templates::robots;
 
     fn base_sheets() -> Vec<String> {
@@ -340,14 +428,13 @@ mod tests {
         assert_eq!(None, bare.description());
         assert_eq!(None, bare.social_image());
         assert_eq!(None, bare.social_image_alt());
-        assert_eq!(None, bare.keywords());
         assert_eq!(None, bare.jsonld());
+        assert_eq!(None, bare.article());
 
         let overridden: PageTemplateData = bare
             .with_description("A specific page.")
             .with_social_image("/static/image/social/blog.webp")
             .with_social_image_alt("The blog card")
-            .with_keywords(["blog", "rust"])
             .with_jsonld(json!({ "@type": "BlogPosting" }));
 
         assert_eq!(Some("A specific page."), overridden.description());
@@ -356,10 +443,39 @@ mod tests {
             overridden.social_image()
         );
         assert_eq!(Some("The blog card"), overridden.social_image_alt());
-        assert_eq!(
-            Some(vec![String::from("blog"), String::from("rust")].as_slice()),
-            overridden.keywords()
-        );
         assert!(overridden.jsonld().is_some());
+    }
+
+    #[test]
+    fn a_page_is_a_website_until_it_is_given_article_metadata() {
+        let page: PageTemplateData = PageTemplateData::new("home", "Home", "/");
+
+        let expected: &str = "website";
+        let actual: &str = page.og_type();
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn attaching_article_metadata_is_what_makes_the_og_type_an_article() {
+        let published: DateTime<Utc> = Utc.with_ymd_and_hms(2026, 1, 15, 0, 0, 0).unwrap();
+        let page: PageTemplateData = PageTemplateData::new("blog-post", "A Post", "/blog/a-post")
+            .with_article(
+                Article::new(published)
+                    .with_section("Engineering")
+                    .extend_tags(["rust", "axum"]),
+            );
+
+        let expected: &str = "article";
+        let actual: &str = page.og_type();
+        assert_eq!(expected, actual);
+
+        let article: &Article = page.article().expect("set above");
+        assert_eq!(published, article.published_time);
+        assert_eq!(None, article.modified_time);
+        assert_eq!(Some(String::from("Engineering")), article.section);
+        assert_eq!(
+            vec![String::from("rust"), String::from("axum")],
+            article.tags
+        );
     }
 }

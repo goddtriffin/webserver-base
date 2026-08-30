@@ -15,6 +15,28 @@ use super::error::TemplateError;
 /// `pages/home.hbs` is `{{> home}}`; stems must be unique across all three.
 pub const TEMPLATE_DIRECTORIES: [&str; 3] = ["layouts", "pages", "partials"];
 
+/// Where a project's templates live. Not configurable: every project uses this
+/// layout, and a knob that can only correctly hold one value is not a knob.
+pub const TEMPLATE_ROOT: &str = "html";
+
+/// The name of the embedded layout every page extends.
+pub const BASE_TEMPLATE_NAME: &str = "base";
+
+/// The 404 template every frontend must provide.
+///
+/// Its data is not a per-project decision — every site wants the same page name,
+/// the same `/404` URL and the same `noindex, follow` — so the library declares
+/// it. What it *looks* like is still entirely the project's.
+pub const NOT_FOUND_TEMPLATE_NAME: &str = "404";
+
+/// The layout itself, compiled into the crate.
+///
+/// Shipping it here rather than copying it into each project is the whole
+/// point: the `<head>` is pure function — spec conformance, Open Graph, JSON-LD
+/// — and solving it once means no project can drift into a stale or subtly
+/// wrong version of it.
+const BASE_TEMPLATE: &str = include_str!("../../assets/html/layouts/base.hbs");
+
 // Comma-joins a list of strings, for `<meta name="keywords">`.
 handlebars_helper!(join: |list: Vec<String>| list.join(","));
 
@@ -33,8 +55,14 @@ pub struct TemplateRegistry<'a> {
 }
 
 impl<'a> TemplateRegistry<'a> {
-    /// An empty registry with the built-in helpers and strict mode, touching no
-    /// files.
+    /// A registry holding only the embedded `base` layout, plus the built-in
+    /// helpers and strict mode. Touches no files.
+    ///
+    /// # Panics
+    ///
+    /// Never in practice: the only template registered is compiled into the
+    /// binary, so a failure here means this crate shipped a layout that does
+    /// not parse, which its own tests would have caught.
     #[must_use]
     pub fn empty() -> Self {
         let mut handlebars: Handlebars<'a> = Handlebars::new();
@@ -47,19 +75,37 @@ impl<'a> TemplateRegistry<'a> {
         // `<title>` is a bug that ships, a failed render is one that gets fixed.
         handlebars.set_strict_mode(true);
 
+        handlebars
+            .register_template_string(BASE_TEMPLATE_NAME, BASE_TEMPLATE)
+            .expect("the embedded base layout compiles");
+
         Self { handlebars }
     }
 
-    /// Loads every template under `root`'s `layouts`, `pages` and `partials`.
+    /// Loads every template under `root`'s `layouts`, `pages` and `partials`,
+    /// on top of the embedded `base` layout.
     ///
     /// # Errors
     ///
-    /// [`TemplateError::ReadDirectory`] if a directory is unreadable, or
-    /// [`TemplateError::Compile`] if a template does not compile.
+    /// [`TemplateError::ReadDirectory`] if `root` or a subdirectory is
+    /// unreadable, [`TemplateError::ReservedName`] if a file would shadow the
+    /// embedded layout, [`TemplateError::NoPages`] if no page templates exist,
+    /// or [`TemplateError::Compile`] if a template does not compile.
     #[instrument(skip_all)]
     pub fn from_dir(root: impl AsRef<Path>) -> Result<Self, TemplateError> {
         let root: &Path = root.as_ref();
         let mut registry: Self = Self::empty();
+        let mut pages: usize = 0;
+
+        if !root.is_dir() {
+            return Err(TemplateError::ReadDirectory {
+                path: root.to_path_buf(),
+                source: std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "a frontend needs a template directory",
+                ),
+            });
+        }
 
         for directory in TEMPLATE_DIRECTORIES {
             let path: PathBuf = root.join(directory);
@@ -86,6 +132,20 @@ impl<'a> TemplateRegistry<'a> {
                     continue;
                 };
 
+                // Silently letting a project's file win would disable the
+                // embedded `<head>` and nobody would notice until the SEO tags
+                // went missing in production.
+                if name == BASE_TEMPLATE_NAME {
+                    return Err(TemplateError::ReservedName {
+                        name: BASE_TEMPLATE_NAME,
+                        path: file,
+                    });
+                }
+
+                if directory == "pages" {
+                    pages += 1;
+                }
+
                 registry
                     .handlebars
                     .register_template_file(name, &file)
@@ -94,6 +154,18 @@ impl<'a> TemplateRegistry<'a> {
                         source: Box::new(source),
                     })?;
             }
+        }
+
+        if pages == 0 {
+            return Err(TemplateError::NoPages {
+                path: root.join("pages"),
+            });
+        }
+
+        if !registry.has_template(NOT_FOUND_TEMPLATE_NAME) {
+            return Err(TemplateError::MissingNotFoundPage {
+                path: root.join("pages").join("404.hbs"),
+            });
         }
 
         Ok(registry)
@@ -142,13 +214,25 @@ impl std::fmt::Debug for TemplateRegistry<'_> {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+    use std::path::PathBuf;
+
     use serde_json::json;
 
     use super::TemplateRegistry;
     use crate::templates::error::TemplateError;
 
     #[test]
-    fn an_empty_registry_has_no_templates() {
+    fn a_registry_holds_the_embedded_layout_before_it_touches_any_file() {
+        let registry: TemplateRegistry<'_> = TemplateRegistry::empty();
+
+        let expected: bool = true;
+        let actual: bool = registry.has_template(super::BASE_TEMPLATE_NAME);
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn a_registry_holding_only_the_layout_has_no_pages() {
         let registry: TemplateRegistry<'_> = TemplateRegistry::empty();
 
         let expected: bool = false;
@@ -210,13 +294,70 @@ mod tests {
     }
 
     #[test]
-    fn a_missing_template_root_is_not_an_error() {
-        let registry: TemplateRegistry<'_> =
-            TemplateRegistry::from_dir("/tmp/wsb-nonexistent-template-root")
-                .expect("absent directories are skipped");
+    fn a_frontend_without_a_template_root_cannot_start() {
+        let error: TemplateError = TemplateRegistry::from_dir("/tmp/wsb-nonexistent-template-root")
+            .expect_err("a frontend needs templates");
+        assert!(matches!(error, TemplateError::ReadDirectory { .. }));
+    }
 
-        let expected: bool = false;
-        let actual: bool = registry.has_template("home");
+    #[test]
+    fn a_project_layout_named_base_is_refused_rather_than_silently_winning() {
+        let root: PathBuf = PathBuf::from("/tmp/wsb-reserved-name/html");
+        fs::create_dir_all(root.join("layouts")).expect("temp dirs");
+        fs::create_dir_all(root.join("pages")).expect("temp dirs");
+        fs::write(root.join("pages/home.hbs"), "hi").expect("temp file");
+        fs::write(root.join("pages/404.hbs"), "nope").expect("temp file");
+        fs::write(root.join("layouts/base.hbs"), "<html></html>").expect("temp file");
+
+        let error: TemplateError =
+            TemplateRegistry::from_dir(&root).expect_err("`base` is reserved");
+        assert!(matches!(error, TemplateError::ReservedName { name, .. } if name == "base"));
+
+        fs::remove_dir_all("/tmp/wsb-reserved-name").ok();
+    }
+
+    #[test]
+    fn a_project_may_add_any_other_layout() {
+        let root: PathBuf = PathBuf::from("/tmp/wsb-other-layout/html");
+        fs::create_dir_all(root.join("layouts")).expect("temp dirs");
+        fs::create_dir_all(root.join("pages")).expect("temp dirs");
+        fs::write(root.join("pages/home.hbs"), "hi").expect("temp file");
+        fs::write(root.join("pages/404.hbs"), "nope").expect("temp file");
+        fs::write(root.join("layouts/chapter.hbs"), "shell").expect("temp file");
+
+        let registry: TemplateRegistry<'_> =
+            TemplateRegistry::from_dir(&root).expect("a non-reserved layout is fine");
+
+        let expected: bool = true;
+        let actual: bool = registry.has_template("chapter");
         assert_eq!(expected, actual);
+
+        fs::remove_dir_all("/tmp/wsb-other-layout").ok();
+    }
+
+    #[test]
+    fn a_frontend_with_no_pages_cannot_start() {
+        let root: PathBuf = PathBuf::from("/tmp/wsb-no-pages/html");
+        fs::create_dir_all(root.join("partials")).expect("temp dirs");
+        fs::write(root.join("partials/footer.hbs"), "<footer></footer>").expect("temp file");
+
+        let error: TemplateError =
+            TemplateRegistry::from_dir(&root).expect_err("a frontend must serve a page");
+        assert!(matches!(error, TemplateError::NoPages { .. }));
+
+        fs::remove_dir_all("/tmp/wsb-no-pages").ok();
+    }
+
+    #[test]
+    fn a_frontend_without_a_404_template_cannot_start() {
+        let root: PathBuf = PathBuf::from("/tmp/wsb-no-404/html");
+        fs::create_dir_all(root.join("pages")).expect("temp dirs");
+        fs::write(root.join("pages/home.hbs"), "hi").expect("temp file");
+
+        let error: TemplateError =
+            TemplateRegistry::from_dir(&root).expect_err("every frontend serves a 404");
+        assert!(matches!(error, TemplateError::MissingNotFoundPage { .. }));
+
+        fs::remove_dir_all("/tmp/wsb-no-404").ok();
     }
 }

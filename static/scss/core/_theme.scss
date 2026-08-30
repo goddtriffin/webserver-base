@@ -171,7 +171,9 @@
   }
 }
 
-.color-background {
+// The base layout owns a bare `<body>`, so the page surface is styled here
+// rather than by a utility class the layout had to know about.
+body {
   background-color: var(--color-background);
   color: var(--color-on-background);
 }

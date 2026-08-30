@@ -6,11 +6,13 @@ use std::time::Duration;
 use tokio::sync::watch;
 use tracing::{info, instrument, warn};
 
-/// How long in-flight work gets once shutdown begins.
+/// The longest in-flight work may take once shutdown begins.
 ///
-/// The bound is what makes graceful shutdown work. `with_graceful_shutdown`
-/// waits for every connection, and a WebSocket never closes on its own — so
-/// without a deadline a socket-holding server hangs until it is killed.
+/// A ceiling, never a wait: a server holding no connection exits the instant it
+/// is signalled. The ceiling is what makes graceful shutdown terminate at all —
+/// `with_graceful_shutdown` waits for every connection, and a WebSocket never
+/// closes on its own, so without a deadline a socket-holding server hangs until
+/// it is killed.
 pub const DEFAULT_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// A cloneable handle that resolves when the process should stop.

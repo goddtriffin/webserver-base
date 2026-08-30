@@ -22,14 +22,15 @@ workspace = true
 [features]
 default = []
 
-# Content-hashed static assets, plus the cache-control middleware pair.
-assets = ["dep:axum", "dep:md5", "dep:regex", "dep:chrono"]
-
-# Handlebars registry and the three template-data types.
+# Handlebars registry, the embedded base layout, and the three template-data
+# types.
 templates = ["dep:handlebars", "dep:chrono"]
 
-# Plausible Analytics event forwarding, with true-client-IP resolution.
-analytics = ["dep:axum", "dep:plausible-rs", "dep:reqwest"]
+# First-party proxies for Plausible and the Sentry browser SDK, with
+# true-client-IP resolution. Both are byte relays: nothing is parsed or
+# re-reported, so a blocked third-party origin becomes a same-origin request
+# without changing what the upstream receives.
+analytics = ["dep:axum", "dep:reqwest"]
 
 # sitemap.xml generation.
 sitemap = ["dep:sitemap-rs", "dep:xml-builder", "dep:chrono"]
@@ -40,23 +41,31 @@ observability = ["dep:sentry", "dep:tracing-subscriber"]
 # Outbound Telegram Bot API notifier.
 telegram = ["dep:reqwest", "dep:tokio"]
 
-# The web server itself: builder, shared state, bootstrap, graceful shutdown.
+# The web server itself: builder, shared state, bootstrap, graceful shutdown,
+# and the build-time static-asset pipeline (icon generation, content hashing,
+# manifest emission). There is no separate `assets` gate: whether a server
+# hashes anything is decided by the presence of `static/` on disk, not at
+# compile time.
 webserver = [
   "dep:axum",
   "dep:axum-extra",
   "dep:tower",
   "dep:tower-http",
   "dep:tokio",
+  "dep:md5",
+  "dep:regex",
+  "dep:chrono",
+  "dep:resvg",
+  "dep:imagesize",
 ]
 
-# Page declarations that produce both routes and sitemap entries.
-pages = ["webserver", "templates", "sitemap"]
+# Everything a site serving HTML needs. `WebServer::frontend` lives here.
+pages = ["webserver", "templates", "sitemap", "analytics"]
 
-# Todd Everett Griffin's personal defaults.
+# Todd Everett Griffin's personal defaults, including the embedded humans.txt.
 preset = ["templates"]
 
 full = [
-  "assets",
   "templates",
   "analytics",
   "sitemap",
@@ -85,19 +94,23 @@ tower-http = { workspace = true, optional = true }
 # webserver (serve loop), telegram (delivery worker)
 tokio = { workspace = true, optional = true }
 
-# assets (content hashing + source-map rewriting)
+# static assets (content hashing + source-map rewriting)
 md5 = { workspace = true, optional = true }
 regex = { workspace = true, optional = true }
+
+# static assets (generating the icon set from favicon.svg, and reading the
+# social image's dimensions for og:image:width)
+resvg = { workspace = true, optional = true }
+imagesize = { workspace = true, optional = true }
 
 # templates
 handlebars = { workspace = true, optional = true }
 
-# assets (cache expiry), templates (copyright year), sitemap (lastmod)
+# static assets (cache expiry), templates (copyright year), sitemap (lastmod)
 chrono = { workspace = true, optional = true }
 
-# analytics, telegram
+# analytics (proxying), telegram
 reqwest = { workspace = true, optional = true, features = ["multipart"] }
-plausible-rs = { workspace = true, optional = true }
 
 # sitemap
 sitemap-rs = { workspace = true, optional = true }

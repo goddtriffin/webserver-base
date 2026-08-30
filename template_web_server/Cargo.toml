@@ -22,16 +22,12 @@ workspace = true
 
 # The whole dependency list. Everything this server used to name directly —
 # axum, tower, tower-http, sentry, tracing-subscriber, sitemap-rs, xml-builder,
-# chrono, reqwest, serde, serde_json, serde_yaml, futures, rand, plausible-rs —
-# is now reached through the kits it enables here.
+# chrono, reqwest, serde, serde_json, serde_yaml, futures, rand — is now
+# reached through the kits it enables here. `pages` implies `webserver`,
+# `templates`, `sitemap` and `analytics`.
 [dependencies]
 webserver-base = { path = "../webserver_base", features = [
-  "webserver",
   "pages",
-  "templates",
-  "assets",
-  "analytics",
-  "sitemap",
   "observability",
   "preset",
 ] }

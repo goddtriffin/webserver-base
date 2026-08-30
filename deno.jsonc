@@ -1,11 +1,10 @@
 {
   "name": "@todd/webserver-base",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "exports": {
     ".": "./static/script/webserver-base/mod.ts",
     "./bundle": "./static/script/webserver-base/bundle.ts",
     "./free-port": "./static/script/webserver-base/free-port.ts",
-    "./scitylana": "./static/script/webserver-base/scitylana.ts",
     "./logger": "./static/script/webserver-base/logger.ts"
   },
   "publish": {
