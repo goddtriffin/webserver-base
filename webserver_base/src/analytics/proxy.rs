@@ -71,7 +71,7 @@ pub async fn relay_event(
     peer: SocketAddr,
     body: Bytes,
 ) -> Response {
-    let mut request = client.post(upstream).body(body).header(
+    let mut request: reqwest::RequestBuilder = client.post(upstream).body(body).header(
         "X-Forwarded-For",
         resolve_true_client_ip_address(peer, headers),
     );

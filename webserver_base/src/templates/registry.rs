@@ -114,13 +114,14 @@ impl<'a> TemplateRegistry<'a> {
                 continue;
             }
 
-            let entries = fs::read_dir(&path).map_err(|source| TemplateError::ReadDirectory {
-                path: path.clone(),
-                source,
-            })?;
+            let entries: fs::ReadDir =
+                fs::read_dir(&path).map_err(|source| TemplateError::ReadDirectory {
+                    path: path.clone(),
+                    source,
+                })?;
 
             for entry in entries {
-                let entry = entry.map_err(|source| TemplateError::ReadDirectory {
+                let entry: fs::DirEntry = entry.map_err(|source| TemplateError::ReadDirectory {
                     path: path.clone(),
                     source,
                 })?;

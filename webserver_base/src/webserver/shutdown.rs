@@ -1,5 +1,6 @@
 //! Coordinated graceful shutdown.
 
+use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -14,6 +15,68 @@ use tracing::{info, instrument, warn};
 /// closes on its own, so without a deadline a socket-holding server hangs until
 /// it is killed.
 pub const DEFAULT_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Application cleanup that must finish before the process exits.
+///
+/// [`WebServer::run`](super::WebServer::run) requires it of every state it
+/// carries, so a project cannot add app state and quietly forget that it needs
+/// draining. A server with no state gets the no-op implementation below and
+/// writes nothing.
+///
+/// The library owns the sequencing. This runs the moment the shutdown signal
+/// arrives, *concurrently* with the connection drain and under the same
+/// [`DEFAULT_DRAIN_TIMEOUT`], so a slow drain never eats the cleanup's budget
+/// and the two together cannot exceed one window. Overrunning is reported at
+/// `error!` by the caller — do not try to bound this yourself for that reason.
+///
+/// Being cut off at the ceiling is ordinary cancellation: the future is
+/// dropped at its last await point. Anything that must not be interrupted
+/// mid-way needs to be atomic on its own, because no shutdown design can
+/// cancel a synchronously blocking call.
+///
+/// # Idempotency
+///
+/// **This runs once per server holding the state, so it must be idempotent.** A
+/// binary running several servers off one `Arc<AppState>` calls it once per
+/// server. The library cannot deduplicate that — each [`WebServer`](super::WebServer)
+/// builds its own [`WebServerState`](super::WebServerState), and only the
+/// application knows what those share. Guard anything that would misbehave
+/// twice behind a `OnceCell` in your own state.
+///
+/// ```no_run
+/// use std::future::Future;
+/// use webserver_base::webserver::AppShutdown;
+///
+/// struct AppState {
+///     telegram: SomeNotifier,
+/// }
+/// # struct SomeNotifier;
+/// # impl SomeNotifier {
+/// #     async fn flush(&self, _: std::time::Duration) -> bool { true }
+/// # }
+///
+/// impl AppShutdown for AppState {
+///     async fn on_shutdown(&self) {
+///         self.telegram.flush(std::time::Duration::from_secs(5)).await;
+///     }
+/// }
+/// ```
+pub trait AppShutdown {
+    /// Drains whatever would otherwise be lost when the process exits.
+    ///
+    /// Returns `impl Future` rather than being an `async fn` because the
+    /// server's own future must stay `Send`, and an `async fn` in a trait
+    /// cannot promise that to its callers.
+    fn on_shutdown(&self) -> impl Future<Output = ()> + Send;
+}
+
+/// A server carrying no application state has nothing to drain.
+///
+/// Deliberately the only blanket implementation: a project that adds state has
+/// to say what draining means for it, and that is the whole point of the bound.
+impl AppShutdown for () {
+    async fn on_shutdown(&self) {}
+}
 
 /// A cloneable handle that resolves when the process should stop.
 ///
@@ -87,11 +150,13 @@ impl Shutdown {
 /// Waits for whichever termination signal arrives first.
 #[cfg(unix)]
 async fn wait_for_signal() {
-    use tokio::signal::unix::{SignalKind, signal};
+    use tokio::signal::unix::{Signal, SignalKind, signal};
 
-    let mut terminate = signal(SignalKind::terminate()).expect("failed to install SIGTERM handler");
-    let mut interrupt = signal(SignalKind::interrupt()).expect("failed to install SIGINT handler");
-    let mut quit = signal(SignalKind::quit()).expect("failed to install SIGQUIT handler");
+    let mut terminate: Signal =
+        signal(SignalKind::terminate()).expect("failed to install SIGTERM handler");
+    let mut interrupt: Signal =
+        signal(SignalKind::interrupt()).expect("failed to install SIGINT handler");
+    let mut quit: Signal = signal(SignalKind::quit()).expect("failed to install SIGQUIT handler");
 
     tokio::select! {
         _ = terminate.recv() => {}

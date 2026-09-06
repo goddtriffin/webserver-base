@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
 use reqwest::Client;
-use tracing::{error, instrument, warn};
+use tracing::{error, instrument};
 
 use super::chat_id::ChatId;
 use super::chunk::{Chunk, SplitOutcome, prepare};
@@ -181,7 +181,7 @@ impl Telegram for ReqwestTelegram {
         let outcome: SplitOutcome = prepare(&text, &message.entities, limit, self.max_chunks);
 
         if outcome.dropped_units > 0 {
-            warn!(
+            error!(
                 "telegram message exceeded {} chunk(s); {} character(s) were truncated",
                 self.max_chunks, outcome.dropped_units
             );
@@ -361,7 +361,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn mock_starts_empty() {
+    async fn a_fresh_mock_has_recorded_nothing_so_a_test_starts_from_a_known_state() {
         let mock: MockTelegram = MockTelegram::new();
 
         assert!(mock.is_empty());
@@ -384,7 +384,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn mock_clears() {
+    async fn clearing_a_mock_discards_earlier_sends_so_one_mock_can_serve_several_phases() {
         let mock: MockTelegram = MockTelegram::new();
         mock.send(ChatId::Id(1), Message::from("hello"));
         mock.clear();

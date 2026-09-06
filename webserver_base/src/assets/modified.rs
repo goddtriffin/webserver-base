@@ -12,7 +12,8 @@
 //! across the templates, the static assets *and* the binary moves when — and
 //! only when — something that determines the output actually changed.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 use chrono::{DateTime, Datelike, Utc};
 use tracing::error;
@@ -57,7 +58,7 @@ fn newest_mtime(root: &Path) -> Option<DateTime<Utc>> {
             continue;
         };
         for entry in entries.flatten() {
-            let path = entry.path();
+            let path: PathBuf = entry.path();
             if path.is_dir() {
                 directories.push(path);
                 continue;
@@ -77,8 +78,8 @@ fn newest_mtime(root: &Path) -> Option<DateTime<Utc>> {
 
 /// The running binary's mtime, so a code-only change still moves the date.
 fn current_exe_mtime() -> Option<DateTime<Utc>> {
-    let exe = std::env::current_exe().ok()?;
-    let modified = std::fs::metadata(exe).ok()?.modified().ok()?;
+    let exe: PathBuf = std::env::current_exe().ok()?;
+    let modified: SystemTime = std::fs::metadata(exe).ok()?.modified().ok()?;
     Some(modified.into())
 }
 

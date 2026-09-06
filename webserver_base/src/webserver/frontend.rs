@@ -120,7 +120,7 @@ where
         declared.extend(params.pages.declared_assets());
         crate::assets::validate_declared(cache_buster, &declared)?;
 
-        let icon_source = crate::assets::validate_icons(cache_buster)?;
+        let icon_source: crate::assets::IconSource = crate::assets::validate_icons(cache_buster)?;
 
         let paths: ProxyPaths = ProxyPaths::derive(params.base.project());
         let social_image: SocialImageMetadata = probe_social_image(&params.base, cache_buster);
@@ -145,7 +145,8 @@ where
             .into_iter()
             .map(|url| url.map_images(|image| cache_buster.get_file(image)))
             .collect();
-        let last_modified = crate::assets::content_modified(&["html", "static"]);
+        let last_modified: Option<chrono::DateTime<chrono::Utc>> =
+            crate::assets::content_modified(&["html", "static"]);
         let sitemaps: SitemapSet =
             build_sitemaps(params.base.base_url(), &sitemap_urls, last_modified)
                 .map_err(WebServerError::Sitemap)?;

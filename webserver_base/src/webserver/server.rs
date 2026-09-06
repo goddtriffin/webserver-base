@@ -1,6 +1,6 @@
 //! The web server builder.
 
-use std::future::IntoFuture;
+use std::future::{Future, IntoFuture};
 use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
 
@@ -12,13 +12,13 @@ use axum::{Router, serve};
 use tokio::net::TcpListener;
 use tower_http::LatencyUnit;
 use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
-use tracing::{Level, info, instrument, warn};
+use tracing::{Level, error, info, instrument, warn};
 
 use crate::env;
 use crate::environment::Environment;
 
 use super::error::WebServerError;
-use super::shutdown::{DEFAULT_DRAIN_TIMEOUT, Shutdown};
+use super::shutdown::{AppShutdown, DEFAULT_DRAIN_TIMEOUT, Shutdown};
 use super::state::{StateParts, WebServerState};
 
 /// The environment variable holding the bind host.
@@ -188,7 +188,10 @@ where
     /// [`WebServerError`] if the host is unparseable, the port cannot be bound,
     /// the frontend cannot be assembled, or serving fails.
     #[instrument(skip_all)]
-    pub async fn run(self, shutdown: Shutdown) -> Result<(), WebServerError> {
+    pub async fn run(self, shutdown: Shutdown) -> Result<(), WebServerError>
+    where
+        S: AppShutdown,
+    {
         let Self {
             host,
             port,
@@ -214,7 +217,10 @@ where
         #[cfg(feature = "pages")]
         let mut templates: Option<crate::templates::TemplateRegistry<'static>> = None;
         #[cfg(feature = "pages")]
-        let mut not_found = None;
+        let mut not_found: Option<(
+            std::sync::Arc<crate::templates::PageTemplateData>,
+            std::sync::Arc<serde_json::Value>,
+        )> = None;
         #[cfg(feature = "pages")]
         let mut proxy_scripts: Option<Router<WebServerState<S>>> = None;
 
@@ -223,7 +229,8 @@ where
             let registry: crate::templates::TemplateRegistry<'static> =
                 crate::templates::TemplateRegistry::from_dir(crate::templates::TEMPLATE_ROOT)?;
 
-            let built = super::frontend::Frontend::build(params, &cache_buster, environment)?;
+            let built: super::frontend::Frontend<S> =
+                super::frontend::Frontend::build(params, &cache_buster, environment)?;
 
             no_cache = no_cache.merge(well_known_routes(&built.well_known));
             no_cache = no_cache.merge(icon_routes(&cache_buster, built.has_svg_icon));
@@ -256,19 +263,9 @@ where
         }
 
         #[cfg(feature = "pages")]
-        let app_router = match not_found {
-            Some((page, data)) => app_router.fallback(move |axum::extract::State(state)| {
-                let page = std::sync::Arc::clone(&page);
-                let data = std::sync::Arc::clone(&data);
-                async move {
-                    let body: Response = super::pages::render_or_500(&state, &page, &data);
-                    (StatusCode::NOT_FOUND, body).into_response()
-                }
-            }),
-            None => app_router.fallback(plain_not_found),
-        };
+        let app_router: Router<WebServerState<S>> = attach_not_found(app_router, not_found);
         #[cfg(not(feature = "pages"))]
-        let app_router = app_router.fallback(plain_not_found);
+        let app_router: Router<WebServerState<S>> = app_router.fallback(plain_not_found);
 
         let state: WebServerState<S> = WebServerState::new(StateParts {
             host: host.clone(),
@@ -285,9 +282,13 @@ where
             app,
         });
 
+        // The router takes the state by value; cleanup needs it after serving
+        // ends, and `WebServerState` is an `Arc` so this costs a refcount.
+        let cleanup: WebServerState<S> = state.clone();
+
         // Applied outermost-last, so the body cap runs before tracing sees a
         // request it may never finish reading.
-        let app_router = app_router
+        let app_router: Router = app_router
             .with_state(state)
             .layer(
                 TraceLayer::new_for_http()
@@ -309,18 +310,60 @@ where
             )
             .layer(DefaultBodyLimit::max(body_limit));
 
-        serve_on(app_router, &host, port, shutdown).await
+        serve_on(app_router, &host, port, shutdown, async move {
+            cleanup.app().on_shutdown().await;
+        })
+        .await
+    }
+}
+
+/// Attaches the 404 fallback.
+///
+/// A frontend renders its own page at the requested URL with a real 404 status;
+/// a service with no pages answers with a bare body. Split out of `run` because
+/// it is the one branch there that is about a single route rather than about
+/// assembling the router.
+#[cfg(feature = "pages")]
+fn attach_not_found<S>(
+    router: Router<WebServerState<S>>,
+    not_found: Option<(
+        std::sync::Arc<crate::templates::PageTemplateData>,
+        std::sync::Arc<serde_json::Value>,
+    )>,
+) -> Router<WebServerState<S>>
+where
+    S: Clone + Send + Sync + 'static,
+{
+    match not_found {
+        Some((page, data)) => router.fallback(move |axum::extract::State(state)| {
+            let page: std::sync::Arc<crate::templates::PageTemplateData> =
+                std::sync::Arc::clone(&page);
+            let data: std::sync::Arc<serde_json::Value> = std::sync::Arc::clone(&data);
+            async move {
+                let body: Response = super::pages::render_or_500(&state, &page, &data);
+                (StatusCode::NOT_FOUND, body).into_response()
+            }
+        }),
+        None => router.fallback(plain_not_found),
     }
 }
 
 /// Binds and serves until the last connection closes, or the drain window
 /// shuts, whichever comes first.
-async fn serve_on(
+///
+/// `on_shutdown` is the application's own cleanup. It is only ever awaited if a
+/// shutdown signal actually arrives — a server that dies on a bind error drops
+/// it unrun, rather than hanging on cleanup nobody asked for.
+async fn serve_on<F>(
     router: Router,
     host: &str,
     port: u16,
     shutdown: Shutdown,
-) -> Result<(), WebServerError> {
+    on_shutdown: F,
+) -> Result<(), WebServerError>
+where
+    F: Future<Output = ()> + Send,
+{
     let ip: IpAddr = IpAddr::from_str(host).map_err(|source| WebServerError::Bind {
         addr: SocketAddr::from(([0, 0, 0, 0], port)),
         source: std::io::Error::new(std::io::ErrorKind::InvalidInput, source),
@@ -336,6 +379,9 @@ async fn serve_on(
 
     info!("listening on http://{address}");
 
+    // The one binding in the crate with no written type: `WithGracefulShutdown`
+    // is generic over the listener, the make-service, the service and the
+    // shutdown future, and rustc itself elides it when printing.
     let serving = serve(
         listener,
         router.into_make_service_with_connect_info::<SocketAddr>(),
@@ -352,7 +398,25 @@ async fn serve_on(
         () = shutdown.recv() => {}
     }
 
-    match tokio::time::timeout(DEFAULT_DRAIN_TIMEOUT, &mut serving).await {
+    // Two ceilings started at one instant, not one after the other: the drain
+    // and the cleanup are independent, so the process leaves in the longer of
+    // the two rather than their sum — which is what keeps the whole shutdown
+    // inside a single orchestrator kill window.
+    let (served, cleaned) = tokio::join!(
+        tokio::time::timeout(DEFAULT_DRAIN_TIMEOUT, &mut serving),
+        tokio::time::timeout(DEFAULT_DRAIN_TIMEOUT, on_shutdown),
+    );
+
+    // The hook's own reporting never runs when it is cancelled from out here,
+    // so the overrun has to be reported from out here too, or the work it
+    // failed to finish is lost silently.
+    if cleaned.is_err() {
+        error!(
+            "app shutdown hook exceeded {DEFAULT_DRAIN_TIMEOUT:?}; cleanup was cancelled part-way"
+        );
+    }
+
+    match served {
         Ok(result) => result.map_err(WebServerError::Serve),
         // Expected of anything holding a socket open, not a misconfiguration:
         // the ceiling exists precisely because such a connection never ends.
@@ -539,7 +603,7 @@ where
     use axum::routing::post;
 
     let client: reqwest::Client = reqwest::Client::new();
-    let paths = &frontend.runtime;
+    let paths: &crate::templates::FrontendRuntime = &frontend.runtime;
 
     let analytics_script_upstream: String = frontend.analytics.upstream_script_url();
     let analytics_event_upstream: String = AnalyticsConfig::upstream_event_url();
@@ -620,6 +684,8 @@ fn strip_api_prefix(path: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
     use std::time::Duration;
 
     use axum::Router;
@@ -627,7 +693,122 @@ mod tests {
     use tokio::time::timeout;
 
     use super::super::shutdown::Shutdown;
-    use super::{API_PREFIX, DEFAULT_BODY_LIMIT, health, serve_on};
+    use super::{
+        API_PREFIX, AppShutdown, DEFAULT_BODY_LIMIT, DEFAULT_DRAIN_TIMEOUT, WebServerError, health,
+        serve_on,
+    };
+
+    /// Records whether cleanup ran, and can be made slow enough to overrun the
+    /// drain window.
+    #[derive(Clone)]
+    struct RecordingState {
+        ran: Arc<AtomicBool>,
+        linger: Option<Duration>,
+    }
+
+    impl RecordingState {
+        fn instant() -> Self {
+            Self {
+                ran: Arc::new(AtomicBool::new(false)),
+                linger: None,
+            }
+        }
+    }
+
+    impl AppShutdown for RecordingState {
+        async fn on_shutdown(&self) {
+            if let Some(linger) = self.linger {
+                tokio::time::sleep(linger).await;
+            }
+            self.ran.store(true, Ordering::SeqCst);
+        }
+    }
+
+    /// Serves `state` on an ephemeral port and returns once serving has ended.
+    async fn serve_until_shutdown(
+        state: RecordingState,
+        shutdown: Shutdown,
+    ) -> Result<(), WebServerError> {
+        let router: Router = Router::new().route("/health", get(health));
+        let cleanup: RecordingState = state.clone();
+        // Port 0 asks the OS for a free one; nothing here connects to it.
+        serve_on(router, "127.0.0.1", 0, shutdown, async move {
+            cleanup.on_shutdown().await;
+        })
+        .await
+    }
+
+    #[tokio::test]
+    async fn app_cleanup_runs_when_the_shutdown_signal_arrives() {
+        let shutdown: Shutdown = Shutdown::manual();
+        let state: RecordingState = RecordingState::instant();
+        let ran: Arc<AtomicBool> = Arc::clone(&state.ran);
+
+        shutdown.trigger();
+        timeout(
+            Duration::from_secs(1),
+            serve_until_shutdown(state, shutdown.clone()),
+        )
+        .await
+        .expect("serving ended promptly")
+        .expect("serving ended cleanly");
+
+        let expected: bool = true;
+        let actual: bool = ran.load(Ordering::SeqCst);
+        assert_eq!(expected, actual);
+    }
+
+    #[tokio::test]
+    async fn app_cleanup_never_runs_when_the_server_dies_before_any_signal() {
+        // An unparseable host fails before the listener binds, so no signal is
+        // ever sent — the hook must be dropped unrun rather than awaited, or a
+        // failed boot would hang until the drain window closed.
+        let shutdown: Shutdown = Shutdown::manual();
+        let state: RecordingState = RecordingState::instant();
+        let ran: Arc<AtomicBool> = Arc::clone(&state.ran);
+        let cleanup: RecordingState = state.clone();
+
+        let router: Router = Router::new().route("/health", get(health));
+        let result: Result<(), WebServerError> = timeout(
+            Duration::from_secs(1),
+            serve_on(router, "not-an-ip", 0, shutdown, async move {
+                cleanup.on_shutdown().await;
+            }),
+        )
+        .await
+        .expect("a bind failure returns immediately, it does not wait for cleanup");
+
+        assert!(result.is_err(), "an unparseable host is a bind error");
+
+        let expected: bool = false;
+        let actual: bool = ran.load(Ordering::SeqCst);
+        assert_eq!(expected, actual);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_cleanup_that_overruns_the_window_is_cancelled_rather_than_awaited() {
+        // Longer than the ceiling, so the hook cannot finish. With a paused
+        // clock this costs no real time; the assertion is that serving still
+        // returns, which it cannot do if the hook is awaited to completion.
+        let shutdown: Shutdown = Shutdown::manual();
+        let state: RecordingState = RecordingState {
+            ran: Arc::new(AtomicBool::new(false)),
+            linger: Some(DEFAULT_DRAIN_TIMEOUT * 2),
+        };
+        let ran: Arc<AtomicBool> = Arc::clone(&state.ran);
+
+        shutdown.trigger();
+        serve_until_shutdown(state, shutdown.clone())
+            .await
+            .expect("serving still ends cleanly when cleanup is cancelled");
+
+        let expected: bool = false;
+        let actual: bool = ran.load(Ordering::SeqCst);
+        assert_eq!(
+            expected, actual,
+            "the hook was cancelled at its await, so it never reached its final store"
+        );
+    }
 
     #[tokio::test]
     async fn a_server_with_nothing_in_flight_stops_at_once_instead_of_waiting_out_the_window() {
@@ -635,9 +816,9 @@ mod tests {
         let router: Router = Router::new().route("/health", get(health));
 
         // Port 0 asks the OS for a free one; nothing here connects to it.
-        let serving = tokio::spawn({
+        let serving: tokio::task::JoinHandle<Result<(), WebServerError>> = tokio::spawn({
             let shutdown: Shutdown = shutdown.clone();
-            async move { serve_on(router, "127.0.0.1", 0, shutdown).await }
+            async move { serve_on(router, "127.0.0.1", 0, shutdown, async {}).await }
         });
 
         shutdown.trigger();

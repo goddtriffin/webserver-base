@@ -136,10 +136,11 @@ fn hash_tree(root: &Path, phase: Phase) -> Result<BTreeMap<String, String>, Cach
             })?;
 
         for entry in entries {
-            let entry = entry.map_err(|source| CacheBusterError::ReadDirectory {
-                path: directory.clone(),
-                source,
-            })?;
+            let entry: std::fs::DirEntry =
+                entry.map_err(|source| CacheBusterError::ReadDirectory {
+                    path: directory.clone(),
+                    source,
+                })?;
             let path: PathBuf = entry.path();
 
             if path.is_dir() {

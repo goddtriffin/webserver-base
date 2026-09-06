@@ -21,7 +21,7 @@
 use std::path::{Path, PathBuf};
 
 use resvg::tiny_skia::{FilterQuality, Pixmap, PixmapPaint, Transform};
-use resvg::usvg::{Options, Tree};
+use resvg::usvg::{Options, Size, Tree};
 use tracing::info;
 
 use super::error::CacheBusterError;
@@ -217,7 +217,7 @@ impl Renderer {
 
         match self {
             Self::Svg(tree) => {
-                let source = tree.size();
+                let source: Size = tree.size();
                 let transform: Transform =
                     Transform::from_scale(requested / source.width(), requested / source.height());
                 resvg::render(tree, transform, &mut target.as_mut());
@@ -269,10 +269,11 @@ fn existing(manifest: &Manifest, logical: &str) -> Option<PathBuf> {
 ///
 /// [`CacheBusterError::ReadImage`] if the file is absent or not an image.
 pub fn dimensions(path: &Path) -> Result<(u32, u32), CacheBusterError> {
-    let size = imagesize::size(path).map_err(|error| CacheBusterError::ReadImage {
-        path: path.to_path_buf(),
-        reason: error.to_string(),
-    })?;
+    let size: imagesize::ImageSize =
+        imagesize::size(path).map_err(|error| CacheBusterError::ReadImage {
+            path: path.to_path_buf(),
+            reason: error.to_string(),
+        })?;
     Ok((
         u32::try_from(size.width).unwrap_or(0),
         u32::try_from(size.height).unwrap_or(0),

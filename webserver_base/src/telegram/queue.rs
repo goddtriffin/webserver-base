@@ -151,10 +151,13 @@ impl Worker {
         true
     }
 
-    /// Emits a single aggregated warning if enough time has passed.
+    /// Emits a single aggregated report if enough time has passed.
     ///
     /// Reporting every drop individually is exactly what a flood wants: it
-    /// converts a message flood into a log flood.
+    /// converts a message flood into a log flood. The interval solves that;
+    /// the severity is a separate question, and dropped notifications are lost
+    /// notifications, so this reports at `error!` and reaches Sentry as one
+    /// grouped issue with a rising count.
     fn report_drops_if_due(state: &mut QueueState) {
         let now: Instant = Instant::now();
 
@@ -163,7 +166,7 @@ impl Worker {
         }
 
         if state.dropped > 0 {
-            warn!(
+            error!(
                 "telegram queue full: dropped {} message(s) since the last report",
                 state.dropped
             );
@@ -264,7 +267,9 @@ impl Worker {
             }
 
             if Instant::now() >= deadline {
-                warn!(
+                // The Sentry guard outlives the drain — `bootstrap` drops it
+                // after the body returns — so this still reaches Sentry.
+                error!(
                     "telegram queue did not drain within {:?}; {} message(s) abandoned",
                     timeout,
                     self.queued()

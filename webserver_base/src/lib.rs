@@ -44,4 +44,6 @@ pub mod templates;
 pub mod webserver;
 
 #[cfg(feature = "webserver")]
-pub use webserver::{Shutdown, WebServer, WebServerError, WebServerState, bootstrap_with_release};
+pub use webserver::{
+    AppShutdown, Shutdown, WebServer, WebServerError, WebServerState, bootstrap_with_release,
+};

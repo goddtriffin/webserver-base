@@ -21,7 +21,7 @@ pub use error::WebServerError;
 #[cfg(feature = "pages")]
 pub use frontend::{Frontend, FrontendParams, WellKnown};
 pub use server::{API_PREFIX, DEFAULT_BODY_LIMIT, DEFAULT_PORT, ENV_HOST, ENV_PORT, WebServer};
-pub use shutdown::{DEFAULT_DRAIN_TIMEOUT, Shutdown};
+pub use shutdown::{AppShutdown, DEFAULT_DRAIN_TIMEOUT, Shutdown};
 pub use state::WebServerState;
 
 #[cfg(feature = "pages")]

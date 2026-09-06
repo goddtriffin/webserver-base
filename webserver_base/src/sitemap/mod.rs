@@ -320,7 +320,7 @@ fn absolute(base_url: &str, path: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use chrono::{TimeZone, Utc};
+    use chrono::{DateTime, TimeZone, Utc};
 
     use super::{SitemapSet, SitemapUrl, absolute, build_sitemaps};
 
@@ -421,8 +421,8 @@ mod tests {
 
     #[test]
     fn a_page_date_wins_over_the_site_wide_fallback() {
-        let page_date = Utc.with_ymd_and_hms(2026, 1, 2, 3, 4, 5).unwrap();
-        let site_date = Utc.with_ymd_and_hms(2020, 1, 1, 0, 0, 0).unwrap();
+        let page_date: DateTime<Utc> = Utc.with_ymd_and_hms(2026, 1, 2, 3, 4, 5).unwrap();
+        let site_date: DateTime<Utc> = Utc.with_ymd_and_hms(2020, 1, 1, 0, 0, 0).unwrap();
 
         let urls: Vec<SitemapUrl> = vec![
             SitemapUrl::new("/blog").with_last_modified(page_date),

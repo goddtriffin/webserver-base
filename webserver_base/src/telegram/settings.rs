@@ -273,7 +273,7 @@ mod tests {
     }
 
     #[test]
-    fn overrides_are_applied() {
+    fn an_explicit_setting_beats_the_environment_it_was_read_from() {
         let settings: TelegramSettings = TelegramSettings::builder(VALID)
             .base_url("http://127.0.0.1:8080/")
             .queue_capacity(16)

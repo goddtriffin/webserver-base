@@ -70,7 +70,7 @@ where
     // Resolved here rather than in every `main`: it is the same three lines in
     // every project, and one of them is easy to get in the wrong order.
     #[cfg(feature = "observability")]
-    let _guard = {
+    let _guard: crate::observability::ObservabilityGuard = {
         let environment: crate::Environment = crate::Environment::from_env()
             .map_err(|error| E::from(super::error::WebServerError::from(error)))?;
         crate::observability::Observability::from_env(environment)

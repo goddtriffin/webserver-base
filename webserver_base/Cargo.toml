@@ -121,7 +121,10 @@ sentry = { workspace = true, optional = true }
 tracing-subscriber = { workspace = true, optional = true }
 
 [dev-dependencies]
-tokio = { workspace = true }
+# `test-util` gives tests a paused clock, so a drain-window overrun can be
+# asserted without a test that actually sleeps for the drain window. Dev-only:
+# consumers never build with it.
+tokio = { workspace = true, features = ["test-util"] }
 
 [package.metadata.docs.rs]
 all-features = true

@@ -91,7 +91,7 @@ opt-in, so a sidecar serving one health check is a valid server.
 | `body_limit` | request body cap, default 256 KiB — raise it for uploads |
 | `nest` / `merge` / `nest_service` | your own routes |
 | `frontend` | declares this server a website; see below |
-| `run` | binds, serves, drains |
+| `run` | binds, serves, drains, and runs the state's `AppShutdown` cleanup |
 
 Always on, no method to enable them: `GET /api/v1/health`, the `/api/v1` prefix
 itself, and the graceful-drain window.
@@ -101,6 +101,45 @@ soon as the last in-flight request finishes — with nothing in flight, that is
 immediate. `DEFAULT_DRAIN_TIMEOUT` is the ceiling on that wait, not a pause: it
 exists because a WebSocket never closes on its own, and reaching it logs a
 warning and drops what remained.
+
+### `AppShutdown` — draining your own state
+
+Anything your state holds that would be *lost* at exit — a queued notifier, a
+spooled writer, a connection pool — has to be drained while the runtime is still
+alive. `run` therefore requires `S: AppShutdown`:
+
+```rust
+impl AppShutdown for AppState {
+    async fn on_shutdown(&self) {
+        self.telegram.flush(Duration::from_secs(5)).await;
+    }
+}
+```
+
+**It is a bound, not a hook you remember to attach.** Adding state without an
+implementation is a compile error, which is the point: forgetting cleanup is
+otherwise invisible until the deploy where the notification you needed never
+arrives. A server with no state gets a blanket no-op and writes nothing.
+
+The library owns the sequencing, so there is no ordering to get wrong and no
+result to hold across it. Cleanup starts the moment the signal arrives,
+**concurrently with the connection drain and under the same ceiling** — so the
+process leaves in the longer of the two, never their sum, and a slow drain
+cannot eat the cleanup's budget. That matters: the drain ceiling is already 10
+seconds, which is also Docker's default kill grace, so anything running *after*
+the drain would be killed rather than run.
+
+Overrunning the ceiling is ordinary cancellation — the future is dropped at its
+last `.await` — and it is reported at `error!` by the server, not by your hook.
+Your hook cannot report it, because being cancelled is precisely what stops it
+running. That is also why `on_shutdown` takes no deadline argument: there is
+only ever one ceiling, and it belongs to the library.
+
+**It must be idempotent.** It runs once per server holding the state, so a
+binary running several servers off one `Arc<AppState>` calls it once per server.
+The library cannot deduplicate that — each `WebServer` builds its own
+`WebServerState`, and only your application knows what they share. Guard
+anything that would misbehave twice behind a `OnceCell` of your own.
 
 Static assets are **presence-detected**: if a `static/` directory exists the
 server serves `/static` and loads the manifest; if not, it does neither. There is
@@ -528,9 +567,69 @@ for things nobody needs to act on.
 
 ## Telegram
 
-`telegram` provides an outbound Bot API notifier: entity-based formatting (no
-escaping), UTF-16 message chunking, per-chat rate limiting, `retry_after`-aware
-retries, and structural bot-token redaction in errors and logs.
+`telegram` is an outbound Bot API notifier, send-only on purpose: no polling, no
+webhooks, no update handling, because no consuming project receives anything. It
+replaces the hand-rolled `sendMessage` calls that had been copied between
+projects, each missing a different subset of the hard parts.
+
+```rust
+let settings: TelegramSettings = TelegramSettings::builder("123456789:AA...").build()?;
+let telegram: ReqwestTelegram = ReqwestTelegram::new(settings, None)?;
+
+telegram.send(
+    ChatId::Id(1234),
+    Message::builder()
+        .text("🎨 ")
+        .bold("New pattern")
+        .text("\nInput: ")
+        .code(untrusted_filename) // no escaping, ever
+        .build(),
+);
+```
+
+| type | what it is for |
+|---|---|
+| `Telegram` | the trait to depend on — `send`, and `send_text` for the unformatted case |
+| `ReqwestTelegram` | the real implementation; `new(settings, None)` builds its own client. Adds `flush` and `queued`, which are inherent to it, not on the trait |
+| `MockTelegram` | the test double: `sent`, `sent_to`, `texts`, `len`, `clear` |
+| `Message` / `MessageBuilder` | `Message::text` for the plain case, `Message::builder` for formatting |
+| `Style`, `Entity`, `EntityKind` | the formatting primitives the builder emits |
+| `Media`, `FileSource` | photo, video and document sends, with a caption |
+| `ChatId` | `Id(i64)` or `Username(String)` |
+| `TelegramSettings` | `builder(token)`, then queue capacity, chunk cap, timeouts |
+| `SendOptions` | per-send overrides: `disable_notification`, `protect_content`, `disable_link_preview`, `message_thread_id`, `reply_to_message_id` |
+| `TelegramError`, `BotToken` | errors, and the token type that redacts itself |
+
+**`send` returns immediately.** It queues; a background task chunks, paces,
+retries and delivers. That is why it takes `&self` and cannot fail — the
+failure surfaces in the logs, not the call site.
+
+**Formatting emits entities, not `parse_mode` markup.** Telegram's own docs
+describe entities as what a Markdown or HTML parser is converted *into*, so
+nothing is lost by skipping that step — and because no markup is ever embedded
+in the text, **interpolated values never need escaping**. This is the whole
+reason the builder exists: a filename containing `*` or `_` cannot corrupt a
+message or inject formatting.
+
+Chunking counts **UTF-16 code units**, because that is what Telegram's 4096
+(text) and 1024 (caption) limits count. Entities are clamped and rebased onto
+each piece. A message that would exceed the configured chunk cap is truncated
+and the truncation is logged at `error!`, because a silently shortened
+notification is worse than a loud one.
+
+`flush(timeout)` waits for the queue to drain so the last notifications —
+usually the ones that matter — are not lost. It returns `false` and logs at
+`error!` if the queue did not empty in time.
+
+**Call it from [`AppShutdown`](#appshutdown--draining-your-own-state), not by
+hand.** Hold the notifier in your app state and flush it there: `send` returns
+immediately, so whatever is still queued when the process exits is gone, and
+that typically includes the notification about whatever caused the exit. Doing
+it in the trait is what makes forgetting a compile error rather than a silence
+you discover in production.
+
+Bot tokens redact themselves structurally in `Debug`, errors and logs, so a
+token cannot reach Sentry by being interpolated into a message.
 
 ## Environment
 
@@ -606,3 +705,17 @@ Fixed and not configurable: the `html/` and `static/` directory names, the
 `/api/v1` prefix, the `theme` storage key, the sitemap route shape, the derived
 proxy paths, `<meta charset="utf-8">`, the viewport string, and the entire
 `<head>`.
+
+---
+
+# Working on this repo
+
+## Skills
+
+| skill | use it when |
+|---|---|
+| [`contribution-guide`](.claude/skills/contribution-guide/SKILL.md) | writing, reviewing, refactoring, testing or documenting **any** code here — invoke it at the start of every change, however small |
+| [`rollout`](.claude/skills/rollout/SKILL.md) | shipping a finished change: version bump, E2E smoke test, Docker push, commit to main, tag, GitHub release, crates.io and JSR publishes |
+
+Rules live in the skills, not here. Invoke `contribution-guide` before any
+change to this repo.

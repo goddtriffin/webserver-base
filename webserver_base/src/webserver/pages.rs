@@ -390,7 +390,7 @@ mod tests {
 
     #[test]
     fn sitemap_modifiers_apply_to_the_page_just_declared() {
-        let modified = chrono::Utc
+        let modified: chrono::DateTime<chrono::Utc> = chrono::Utc
             .with_ymd_and_hms(2026, 3, 4, 5, 6, 7)
             .single()
             .expect("a real instant");
