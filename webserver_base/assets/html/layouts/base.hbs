@@ -18,6 +18,15 @@
   <meta name="author" content="{{author}}">
   <meta name="application-name" content="{{project}}">
   <link type="text/plain" rel="author" href="{{base_url}}/humans.txt">
+  {{! Feed autodiscovery. This is the whole reason a reader can be handed the
+      site's bare origin and still find the blog. RSS first: a reader that takes
+      the first `rel="alternate"` instead of offering a choice is far more
+      likely to be RSS-only than Atom-only. }}
+  {{#if feed}}
+  <link rel="alternate" type="application/rss+xml" title="{{feed.title}} (RSS)" href="{{feed.rss}}">
+  <link rel="alternate" type="application/atom+xml" title="{{feed.title}} (Atom)" href="{{feed.atom}}">
+  <link rel="alternate" type="application/feed+json" title="{{feed.title}} (JSON)" href="{{feed.json}}">
+  {{/if}}
 
   {{! Colour scheme. `color-scheme` makes form controls, scrollbars and the
       pre-CSS default background match the theme; `theme-color` tints browser

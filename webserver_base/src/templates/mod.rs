@@ -17,8 +17,8 @@ mod theme;
 pub use base::{BaseTemplateData, BaseTemplateDataParams};
 pub use error::TemplateError;
 pub use frontend::{
-    AnalyticsPaths, FrontendRuntime, MINIMUM_SOCIAL_IMAGE_HEIGHT, MINIMUM_SOCIAL_IMAGE_WIDTH,
-    SentryBrowser, SocialImageMetadata,
+    AnalyticsPaths, FeedLinks, FrontendRuntime, MINIMUM_SOCIAL_IMAGE_HEIGHT,
+    MINIMUM_SOCIAL_IMAGE_WIDTH, SentryBrowser, SocialImageMetadata,
 };
 pub use page::{Article, PageTemplateData};
 pub use registry::{

@@ -65,6 +65,28 @@ impl SocialImageMetadata {
     }
 }
 
+/// The autodiscovery links a reader uses to find the feed.
+///
+/// Emitted on every page, not only on the one the feed mirrors: a reader handed
+/// any URL on the site should still find the stream. Ordered RSS, Atom, JSON in
+/// the layout, because a reader that takes the first `rel="alternate"` rather
+/// than offering a choice is far more likely to be RSS-only than Atom-only.
+///
+/// Plain strings rather than a dependency on the `feed` kit: the layout needs
+/// three URLs and a name, and nothing here should force a templates-only
+/// consumer to compile a feed serializer.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct FeedLinks {
+    /// The feed's name, shown by a reader that presents a picker.
+    pub title: String,
+    /// Absolute URL of the RSS 2.0 document.
+    pub rss: String,
+    /// Absolute URL of the Atom 1.0 document.
+    pub atom: String,
+    /// Absolute URL of the JSON Feed document.
+    pub json: String,
+}
+
 /// Everything a frontend computes once and reuses on every render.
 #[derive(Debug, Clone, Serialize)]
 pub struct FrontendRuntime {
@@ -80,6 +102,8 @@ pub struct FrontendRuntime {
     pub analytics: AnalyticsPaths,
     /// Browser error monitoring.
     pub sentry_browser: SentryBrowser,
+    /// Feed autodiscovery, when the site declared a feed.
+    pub feed: Option<FeedLinks>,
 }
 
 #[cfg(test)]

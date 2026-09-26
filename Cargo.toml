@@ -3,7 +3,7 @@ members = ["webserver_base", "template_web_server"]
 resolver = "2"
 
 [workspace.package]
-version = "0.2.2"
+version = "0.2.3"
 edition = "2024"
 rust-version = "1.98"
 authors = ["Todd Everett Griffin <tgriffin115@gmail.com>"]
@@ -102,6 +102,21 @@ imagesize = "0.15.0"
 sitemap-rs = "0.4.0"
 xml-builder = "0.5.4"
 chrono = { version = "0.4.45", features = ["default", "serde"] }
+
+# feeds: writes RSS/Atom. Chosen over `xml-builder` (which arrives transitively
+# via `sitemap-rs`) because `BytesText::new` escapes element text and
+# `xml-builder`'s `add_text` does not — and feed content is arbitrary post HTML,
+# where one unescaped `&` makes every reader reject the whole document.
+# `default = []`, so this costs exactly itself plus `memchr`.
+quick-xml = "0.42.0"
+
+# feeds (dev only): three independent parsers used as oracles in tests.
+# `roxmltree` proves well-formedness without the circularity of validating
+# quick-xml's output with quick-xml; `rss` and `atom_syndication` prove spec
+# conformance. Consumers never build any of them.
+roxmltree = "0.20.0"
+rss = "2.0.12"
+atom_syndication = "0.12.7"
 
 # templating
 handlebars = "6.4.4"

@@ -84,6 +84,8 @@ where
     pub theme_script: &'a str,
     pub analytics: Option<&'a super::frontend::AnalyticsPaths>,
     pub sentry_browser: Option<&'a super::frontend::SentryBrowser>,
+    /// Feed autodiscovery, when the site declared a feed.
+    pub feed: Option<&'a super::frontend::FeedLinks>,
 
     // ── context ───────────────────────────────────────────────────────────
     pub environment: Environment,
@@ -165,6 +167,7 @@ where
             theme_script: frontend.map_or("", |f| f.theme_script.as_str()),
             analytics: frontend.map(|f| &f.analytics),
             sentry_browser: frontend.map(|f| &f.sentry_browser),
+            feed: frontend.and_then(|f| f.feed.as_ref()),
 
             environment,
             cache_buster,

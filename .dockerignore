@@ -1,7 +1,16 @@
 # directories
 target/
+# No stage copies it; excluded so it is not uploaded as build context.
+bin/
 tests/
 .github/
 
 # files
 Dockerfile
+
+# `COPY static/ static/` would otherwise carry a host-generated cache-buster
+# into the image and feed the JS build a stale manifest. And everything under
+# static/ is hashed and served, so a .DS_Store would get a public URL.
+cache-buster.json
+static/script/generated/
+.DS_Store

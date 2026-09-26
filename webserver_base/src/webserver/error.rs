@@ -56,6 +56,20 @@ pub enum WebServerError {
     #[error(transparent)]
     Sitemap(#[from] crate::sitemap::SitemapError),
 
+    /// A feed could not be built.
+    #[cfg(feature = "feed")]
+    #[error(transparent)]
+    Feed(#[from] crate::feed::FeedError),
+
+    /// `.feed(..)` was called on a server that is not a frontend.
+    ///
+    /// A boot failure rather than a shrug: the feed would simply not be served,
+    /// the autodiscovery links would not be emitted, and nothing at runtime
+    /// would ever say so.
+    #[cfg(feature = "feed")]
+    #[error("cannot serve a feed: the server was built without `.frontend(..)`")]
+    FeedWithoutFrontend,
+
     /// Observability could not be configured.
     #[cfg(feature = "observability")]
     #[error(transparent)]

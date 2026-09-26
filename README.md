@@ -31,10 +31,11 @@ Nothing is enabled by default.
 | `templates` | the Handlebars registry, the embedded base layout, the template-data types |
 | `analytics` | first-party proxies for Plausible and the Sentry browser SDK |
 | `sitemap` | sitemap index and url-set generation |
+| `feed` | RSS 2.0, Atom 1.0 and JSON Feed for a site's content stream |
 | `observability` | Sentry + tracing, initialised in the one order that works |
 | `telegram` | outbound Telegram Bot API notifier |
 | `webserver` | the server builder, shared state, bootstrap, the static-asset pipeline |
-| `pages` | page declarations producing routes *and* sitemap entries — implies `webserver`, `templates`, `sitemap`, `analytics` |
+| `pages` | page declarations producing routes *and* sitemap entries — implies `webserver`, `templates`, `sitemap`, `analytics`, `feed` |
 | `preset` | Todd Everett Griffin's identity defaults, including the shared `humans.txt` |
 | `full` | all of the above |
 
@@ -370,6 +371,93 @@ pattern discredits the whole file.
 
 Sitemaps are held in memory and served from there. Nothing is written to disk.
 
+## Feeds
+
+A site may declare **one** feed, served in all three formats at fixed paths:
+`/rss.xml`, `/atom.xml` and `/feed.json`. `WebServer::feed` is omittable — a
+site with no stream serves no feed documents and emits no autodiscovery links.
+Calling it without `frontend` fails the boot rather than silently serving
+nothing.
+
+```rust
+WebServer::from_env()?
+    .frontend(params)
+    .feed(Feed {
+        title: String::from("Blog | Todd Everett Griffin"),   // what a reader lists you as
+        description: String::from("Writing on Rust and WebGPU."),
+        page_url: String::from("/blog"),                      // must be a declared page
+        entries: posts.iter().map(|post| FeedEntry {
+            path: format!("/blog/{}", post.slug),             // also the permanent id
+            title: post.title.clone(),
+            summary: post.description.clone(),
+            content_html: Some(post.content.clone()),         // `None` ships a teaser
+            published: post.published,
+            modified: post.updated,
+            tags: post.tags.clone(),
+            image: Some(post.card.clone()),
+        }).collect(),
+    })
+    .run(shutdown)
+```
+
+Entries are **passed in, not derived**: a blog is a `dynamic_page_group`, and a
+dynamic page builds its template data per request, so there is nothing to read
+at boot. Supply them in any order and in any number — the library sorts
+newest-first and keeps 20. Deduplicate however suits your data; the library
+reports a repeated `path` but will not silently drop one.
+
+`FeedEntry` is a named-field struct rather than a builder so that shipping a
+teaser feed is something you type (`content_html: None`) rather than something
+you forget.
+
+**Post content is rewritten, not copied.** A reader renders your entry on
+`feedly.com`, so every relative `src` and `href` is cache-busted and then made
+absolute, and a bare `#fragment` is resolved against the post rather than
+against the reader's own page. Rewriting is confined to real elements, so a post
+that merely *shows* markup in a code fence is left alone. `srcset` fails the
+boot instead of being half-rewritten.
+
+Everything else is derived from what the site already declares — author,
+language, icons, copyright, self and alternate links — so there is nothing to
+restate and nothing to drift.
+
+### Caching
+
+Feeds are the most-polled document a site serves, so unlike the other generated
+documents they are **not** served `no-store`. Each carries
+`Cache-Control: public, max-age=1800`, a strong `ETag` computed at boot, and
+`Last-Modified`; a conditional request gets a bodiless `304`.
+
+That only works because the documents are **byte-stable**: `<lastBuildDate>` and
+`<updated>` come from the newest entry rather than the clock, and entries
+sharing an instant break the tie on path, so a `HashMap` upstream cannot move
+the bytes. A redeploy that changed no post re-sends nothing.
+
+### Discovery
+
+Three `rel="alternate"` links go in every page's `<head>`, not only the page the
+feed mirrors, so a reader handed any URL on the site finds the stream. They are
+ordered RSS, Atom, JSON: a reader that takes the first rather than offering a
+choice is far more likely to be RSS-only than Atom-only.
+
+`robots.txt` gains exactly one line — `Sitemap: {base_url}/atom.xml`. Google
+accepts an RSS or Atom file as a sitemap and recommends one *alongside* a full
+sitemap: the sitemap is the inventory, the feed is the recency signal. Atom is
+the one listed because it has a genuine per-entry `<updated>`, so a revised post
+looks revised; RSS carries publication dates only. JSON Feed is not a supported
+sitemap format.
+
+### What fails the boot, and what only shouts
+
+Refused outright: an entry with no title, summary or rooted path; `srcset` in
+content; a `page_url` that is not a declared page; a declared `image` absent
+from the manifest.
+
+Logged at `error!` and served anyway: a feed with no entries, a repeated `path`,
+a future `published`, a `modified` earlier than its `published`, an image inside
+content that the manifest does not know, and any character stripped because XML
+1.0 cannot represent it.
+
 ## Static assets
 
 Hashing happens at **build time**, never at startup.
@@ -557,7 +645,25 @@ INFO starting release=my-project@1.2.3 environment=production log_filter=info
 `RUST_LOG` is honoured and stays unprefixed, being an ecosystem convention;
 `with_log_filter` sets the fallback.
 
-`RUST_LOG` is honoured; `with_log_filter` sets the fallback.
+### Cache tiers are named at boot
+
+Every served resource is logged once at startup with the tier it falls under and
+the URL it is actually reachable at:
+
+```
+INFO immutable 1y  /static/stylesheet/main.css -> /static/stylesheet/main.a1b2c3d4.css
+INFO uncached      /robots.txt
+INFO cached 30m    /atom.xml (etag "4f2a9c1e")
+```
+
+Deliberately at boot rather than per request. A request for an immutable asset
+arriving at the origin is indistinguishable from a first-time visitor, a bot, a
+hard refresh or an evicted entry — only one of those is a fault, so a
+cache-miss log could not tell you anything. What *is* decidable, and decided
+exactly once, is whether each tier was wired up at all: if the immutable lines
+are missing, caching is broken, and you can see it in the first screen of a
+deploy's logs. To check the tier is being honoured beyond your origin, read the
+response headers at the edge rather than inferring it from volume here.
 
 **Severity policy.** `sentry-tracing` maps `error!` to a Sentry event and
 `warn!` to a mere breadcrumb, so a warning with no subsequent error is never

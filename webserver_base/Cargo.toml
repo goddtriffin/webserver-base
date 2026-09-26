@@ -35,6 +35,11 @@ analytics = ["dep:axum", "dep:reqwest"]
 # sitemap.xml generation.
 sitemap = ["dep:sitemap-rs", "dep:xml-builder", "dep:chrono"]
 
+# RSS 2.0, Atom 1.0 and JSON Feed 1.1 for a site's one content stream.
+# `md5` is for the ETag: a feed is the most-polled document a site serves, so a
+# strong validator computed once at boot turns every unchanged poll into a 304.
+feed = ["dep:quick-xml", "dep:chrono", "dep:regex", "dep:md5"]
+
 # Sentry + tracing initialisation, in the one order that works.
 observability = ["dep:sentry", "dep:tracing-subscriber"]
 
@@ -60,7 +65,11 @@ webserver = [
 ]
 
 # Everything a site serving HTML needs. `WebServer::frontend` lives here.
-pages = ["webserver", "templates", "sitemap", "analytics"]
+# `feed` is folded in rather than left independently opt-in: `WebServer::feed`
+# hangs off the same builder, and gating it separately would mean
+# `cfg(all(feature = "pages", feature = "feed"))` through `server.rs` and
+# `frontend.rs` to save a consumer two small crates.
+pages = ["webserver", "templates", "sitemap", "analytics", "feed"]
 
 # Todd Everett Griffin's personal defaults, including the embedded humans.txt.
 preset = ["templates"]
@@ -69,6 +78,7 @@ full = [
   "templates",
   "analytics",
   "sitemap",
+  "feed",
   "observability",
   "telegram",
   "webserver",
@@ -116,6 +126,9 @@ reqwest = { workspace = true, optional = true, features = ["multipart"] }
 sitemap-rs = { workspace = true, optional = true }
 xml-builder = { workspace = true, optional = true }
 
+# feed
+quick-xml = { workspace = true, optional = true }
+
 # observability
 sentry = { workspace = true, optional = true }
 tracing-subscriber = { workspace = true, optional = true }
@@ -125,6 +138,15 @@ tracing-subscriber = { workspace = true, optional = true }
 # asserted without a test that actually sleeps for the drain window. Dev-only:
 # consumers never build with it.
 tokio = { workspace = true, features = ["test-util"] }
+
+# Feed oracles. `roxmltree` proves well-formedness with a parser that is not the
+# one that wrote the document, because a generator checked by its own parser
+# waves through exactly the emit-and-accept bug the check exists for. `rss` and
+# `atom_syndication` implement the specs, so a round-trip through them proves
+# conformance rather than mere syntax. Dev-only: consumers never build them.
+roxmltree = { workspace = true }
+rss = { workspace = true }
+atom_syndication = { workspace = true }
 
 [package.metadata.docs.rs]
 all-features = true
