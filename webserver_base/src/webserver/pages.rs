@@ -175,6 +175,18 @@ where
         }
     }
 
+    /// Every route path that was declared, listed or not.
+    ///
+    /// Used to prove the feed advertises a page the site actually serves; an
+    /// unlisted page still counts, because it is still routed.
+    #[must_use]
+    pub fn paths(&self) -> Vec<&str> {
+        self.entries
+            .iter()
+            .map(|entry| entry.path.as_str())
+            .collect()
+    }
+
     /// How many pages were declared.
     #[must_use]
     pub fn len(&self) -> usize {

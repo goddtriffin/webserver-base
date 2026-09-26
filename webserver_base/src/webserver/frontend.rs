@@ -7,16 +7,18 @@
 
 use crate::analytics::{AnalyticsConfig, SentryDsn};
 use crate::assets::CacheBuster;
+use crate::feed::{ATOM_PATH, Feed, FeedSet, FeedSite, JSON_PATH, RSS_PATH, build_feeds};
 use crate::sitemap::{SitemapSet, SitemapUrl, build_sitemaps};
 use std::sync::Arc;
 
 use serde_json::Value;
 
 use crate::templates::{
-    AnalyticsPaths, BaseTemplateData, FrontendRuntime, NOT_FOUND_TEMPLATE_NAME, PageTemplateData,
-    SentryBrowser, SocialImageMetadata, robots,
+    AnalyticsPaths, BaseTemplateData, FeedLinks, FrontendRuntime, NOT_FOUND_TEMPLATE_NAME,
+    PageTemplateData, SentryBrowser, SocialImageMetadata, robots,
 };
 use crate::{Environment, env};
+use chrono::Datelike as _;
 
 use super::error::WebServerError;
 use super::pages::Pages;
@@ -70,6 +72,11 @@ pub struct WellKnown {
     pub humans_txt: String,
     pub webmanifest: String,
     pub sitemaps: SitemapSet,
+    /// The three feed documents, when the site declared a feed. Unlike the rest
+    /// of this struct these are *not* served uncached: a feed is the most-polled
+    /// document a site has, and stripping its validators would re-send every
+    /// byte on every poll.
+    pub feeds: Option<FeedSet>,
 }
 
 /// A frontend, assembled.
@@ -104,6 +111,7 @@ where
     /// [`WebServerError::Sitemap`] if the sitemaps cannot be built.
     pub fn build(
         params: FrontendParams<S>,
+        feed: Option<Feed>,
         cache_buster: &CacheBuster,
         environment: Environment,
     ) -> Result<Self, WebServerError> {
@@ -151,11 +159,42 @@ where
             build_sitemaps(params.base.base_url(), &sitemap_urls, last_modified)
                 .map_err(WebServerError::Sitemap)?;
 
+        let feed_title: Option<String> = feed.as_ref().map(|feed| feed.title.clone());
+        let feeds: Option<FeedSet> = match feed {
+            None => None,
+            Some(feed) => {
+                if !params.pages.paths().contains(&feed.page_url.as_str()) {
+                    return Err(WebServerError::Feed(
+                        crate::feed::FeedError::PageNotDeclared {
+                            page_url: feed.page_url.clone(),
+                        },
+                    ));
+                }
+                let site: FeedSite = feed_site(&params.base, cache_buster);
+                Some(
+                    build_feeds(&site, &feed, |path: &str| {
+                        cache_buster
+                            .is_hashed(path)
+                            .then(|| cache_buster.get_file(path))
+                    })
+                    .map_err(WebServerError::Feed)?,
+                )
+            }
+        };
+
+        let feed_links: Option<FeedLinks> = feed_title.map(|title| FeedLinks {
+            title,
+            rss: format!("{}{RSS_PATH}", params.base.base_url()),
+            atom: format!("{}{ATOM_PATH}", params.base.base_url()),
+            json: format!("{}{JSON_PATH}", params.base.base_url()),
+        });
+
         let well_known: WellKnown = WellKnown {
-            robots_txt: robots_txt(params.base.base_url(), &sitemaps),
+            robots_txt: robots_txt(params.base.base_url(), &sitemaps, feeds.is_some()),
             humans_txt: humans_txt(&params.base),
             webmanifest: webmanifest(&params.base),
             sitemaps,
+            feeds,
         };
 
         let runtime: FrontendRuntime = FrontendRuntime {
@@ -171,6 +210,7 @@ where
                 tunnel_path: paths.sentry_tunnel.clone(),
                 environment: environment.to_string(),
             },
+            feed: feed_links,
         };
 
         let not_found: (Arc<PageTemplateData>, Arc<Value>) = (
@@ -252,23 +292,61 @@ fn short_hash(input: &str) -> String {
         .collect()
 }
 
+/// Channel metadata for the feed, derived rather than configured a second time.
+///
+/// Everything here already exists on [`BaseTemplateData`] or in the generated
+/// icon set; asking a project to restate it would be one more pair of values
+/// free to drift apart.
+fn feed_site(base: &BaseTemplateData, cache_buster: &CacheBuster) -> FeedSite {
+    let absolute = |path: &str| format!("{}{path}", base.base_url());
+    let year: i32 = chrono::Utc::now().year();
+
+    FeedSite {
+        base_url: String::from(base.base_url()),
+        author: String::from(base.author()),
+        // RFC 5646 wants a hyphen where `og:locale` wants an underscore.
+        language: format!("{}-{}", base.language_code(), base.country_code()),
+        icon_url: cache_buster
+            .is_hashed("static/image/favicon/favicon-512.png")
+            .then(|| absolute("/icon-512.png")),
+        favicon_url: cache_buster
+            .is_hashed("static/image/favicon/favicon.ico")
+            .then(|| absolute("/favicon.ico")),
+        copyright: format!("© {}–{year} {}", base.copyright_start(), base.author()),
+    }
+}
+
 /// Resolves and measures the social card image on disk.
 fn probe_social_image(base: &BaseTemplateData, cache_buster: &CacheBuster) -> SocialImageMetadata {
     let hashed: String = cache_buster.get_file(base.social_image());
     crate::assets::probe_social_image(&hashed)
 }
 
-/// `robots.txt`, naming the sitemap index first and then every url set.
+/// `robots.txt`, naming the sitemap index, then the feed, then every url set.
 ///
-/// Index first is deliberate: Google discards a robots.txt past 500 KiB, and
-/// truncation is positional, so the one line that must survive goes at the top.
-fn robots_txt(base_url: &str, sitemaps: &SitemapSet) -> String {
+/// Order is deliberate: Google discards a robots.txt past 500 KiB and
+/// truncation is positional, so the lines that must survive go at the top.
+///
+/// Only Atom is listed, and only once. Google accepts an RSS 2.0 or Atom 1.0
+/// file as a sitemap and recommends submitting one *alongside* a full sitemap —
+/// the sitemap is the inventory, the feed is the recency signal. Atom wins
+/// because it has a real per-entry `<updated>`; RSS carries publication dates
+/// only, so a revised post looks untouched. Listing both would report the same
+/// URLs twice for nothing, and JSON Feed is not a supported sitemap format at
+/// all. The feed outranks the `sitemap-N.xml` lines for survival because those
+/// are already named by the index above them.
+fn robots_txt(base_url: &str, sitemaps: &SitemapSet, has_feed: bool) -> String {
     /// Well under Google's 500 KiB ceiling, with room for the directives above.
     const BUDGET: usize = 400 * 1024;
 
+    let mut paths: Vec<String> = sitemaps.paths();
+    if has_feed {
+        paths.insert(1, String::from(ATOM_PATH));
+    }
+
     let mut robots: String = String::from("User-agent: *\nAllow: /\n\n");
     let mut omitted: usize = 0;
-    for path in sitemaps.paths() {
+    for path in paths {
         let line: String = format!("Sitemap: {base_url}{path}\n");
         if robots.len() + line.len() > BUDGET {
             omitted += 1;

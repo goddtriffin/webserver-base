@@ -10,6 +10,7 @@
 //! | `templates` | Handlebars registry, the embedded base layout, template data |
 //! | `analytics` | first-party proxies for Plausible and the Sentry browser SDK |
 //! | `sitemap` | sitemap index and url-set generation |
+//! | `feed` | RSS 2.0, Atom 1.0 and JSON Feed for a site's content stream |
 //! | `observability` | Sentry + tracing, initialised in the one order that works |
 //! | `telegram` | outbound Telegram Bot API notifier |
 //! | `webserver` | the server builder, state, bootstrap, static-asset pipeline |
@@ -32,6 +33,8 @@ pub use environment::{ENV_ENVIRONMENT, Environment, EnvironmentParseError};
 pub mod analytics;
 #[cfg(feature = "webserver")]
 pub mod assets;
+#[cfg(feature = "feed")]
+pub mod feed;
 #[cfg(feature = "observability")]
 pub mod observability;
 #[cfg(feature = "sitemap")]

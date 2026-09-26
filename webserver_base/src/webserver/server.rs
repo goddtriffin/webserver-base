@@ -60,6 +60,11 @@ pub struct WebServer<S = ()> {
 
     #[cfg(feature = "pages")]
     frontend: Option<super::frontend::FrontendParams<S>>,
+
+    /// Gated on `pages` rather than `feed`: a feed without a frontend is a
+    /// boot failure, so the two always travel together.
+    #[cfg(feature = "pages")]
+    feed: Option<crate::feed::Feed>,
 }
 
 impl WebServer<()> {
@@ -104,6 +109,8 @@ where
             router: Router::new(),
             #[cfg(feature = "pages")]
             frontend: None,
+            #[cfg(feature = "pages")]
+            feed: None,
         }
     }
 
@@ -181,6 +188,25 @@ where
         self
     }
 
+    /// Gives this site a feed, served as RSS 2.0, Atom 1.0 and JSON Feed.
+    ///
+    /// Omittable, because most sites publish no stream: a site that never calls
+    /// this serves no feed documents and emits no autodiscovery links. Requires
+    /// [`frontend`](WebServer::frontend) — calling this without it fails the
+    /// boot rather than silently serving nothing.
+    ///
+    /// Entries are supplied rather than derived: a blog is a
+    /// [`dynamic_page_group`](Pages::dynamic_page_group), and a dynamic page
+    /// builds its template data per request, so there is nothing to read at
+    /// boot. They may be in any order and may exceed
+    /// [`MAX_FEED_ENTRIES`](crate::feed::MAX_FEED_ENTRIES); the newest survive.
+    #[cfg(feature = "pages")]
+    #[must_use]
+    pub fn feed(mut self, feed: crate::feed::Feed) -> Self {
+        self.feed = Some(feed);
+        self
+    }
+
     /// Binds, serves, and drains.
     ///
     /// # Errors
@@ -201,7 +227,16 @@ where
             router,
             #[cfg(feature = "pages")]
             frontend,
+            #[cfg(feature = "pages")]
+            feed,
         } = self;
+
+        // A feed on a server that is not a frontend is never served, and
+        // nothing at runtime would say so.
+        #[cfg(feature = "pages")]
+        if feed.is_some() && frontend.is_none() {
+            return Err(WebServerError::FeedWithoutFrontend);
+        }
 
         // Hashing is a build step, so this only ever reads what the build
         // produced. A project with no `static/` gets an empty map.
@@ -223,31 +258,24 @@ where
         )> = None;
         #[cfg(feature = "pages")]
         let mut proxy_scripts: Option<Router<WebServerState<S>>> = None;
+        #[cfg(feature = "pages")]
+        let mut feed_router: Option<Router<WebServerState<S>>> = None;
+
+        log_immutable_assets(&cache_buster);
 
         #[cfg(feature = "pages")]
         if let Some(params) = frontend {
-            let registry: crate::templates::TemplateRegistry<'static> =
-                crate::templates::TemplateRegistry::from_dir(crate::templates::TEMPLATE_ROOT)?;
+            let assembled: Assembled<S> =
+                assemble_frontend(params, feed, &cache_buster, environment)?;
 
-            let built: super::frontend::Frontend<S> =
-                super::frontend::Frontend::build(params, &cache_buster, environment)?;
-
-            no_cache = no_cache.merge(well_known_routes(&built.well_known));
-            no_cache = no_cache.merge(icon_routes(&cache_buster, built.has_svg_icon));
-
-            let (scripts, endpoints) = proxy_routes(&built);
-            // The scripts are deliberately kept out of `no_cache`: they carry
-            // the vendor's own cache policy, and stamping `no-store` over it
-            // would re-download the analytics script on every page view.
-            proxy_scripts = Some(scripts);
-            built_in = built_in.merge(endpoints);
-
-            not_found = Some(built.not_found.clone());
-            no_cache = no_cache.merge(built.pages.into_router());
-
-            frontend_runtime = Some(built.runtime);
-            base = Some(built.base);
-            templates = Some(registry);
+            no_cache = no_cache.merge(assembled.routes);
+            built_in = built_in.merge(assembled.api);
+            proxy_scripts = Some(assembled.proxy_scripts);
+            feed_router = assembled.feeds;
+            not_found = Some(assembled.not_found);
+            frontend_runtime = Some(assembled.runtime);
+            base = Some(assembled.base);
+            templates = Some(assembled.templates);
         }
 
         let no_cache: Router<WebServerState<S>> = no_cache.nest(API_PREFIX, built_in);
@@ -260,6 +288,11 @@ where
         #[cfg(feature = "pages")]
         if let Some(scripts) = proxy_scripts {
             app_router = app_router.merge(scripts);
+        }
+
+        #[cfg(feature = "pages")]
+        if let Some(feeds) = feed_router {
+            app_router = app_router.merge(feeds);
         }
 
         #[cfg(feature = "pages")]
@@ -584,6 +617,216 @@ where
     router
 }
 
+/// The feed routes, with the conditional-GET handling the rest of the site has
+/// no use for.
+///
+/// A feed is polled relentlessly — a few hundred subscribers across Feedly,
+/// Inoreader and `NetNewsWire` is tens of thousands of requests a day for a
+/// document that changes twice a year. A strong validator computed at boot
+/// turns all but the first of those into a bodiless `304`.
+///
+/// These routes never see [`CacheBuster::never_cache_middleware`], which
+/// removes `ETag` and `If-None-Match` outright.
+#[cfg(feature = "pages")]
+fn feed_routes<S>(feeds: &crate::feed::FeedSet) -> Router<WebServerState<S>>
+where
+    S: Clone + Send + Sync + 'static,
+{
+    use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
+
+    // Parsed once, at boot: a header value that cannot be built is a
+    // programming error, and discovering it per request would mean either a
+    // panic in a handler or a feed served without its validators.
+    let last_modified: HeaderValue = HeaderValue::from_str(
+        &feeds
+            .last_modified()
+            .format("%a, %d %b %Y %H:%M:%S GMT")
+            .to_string(),
+    )
+    .unwrap_or_else(|_| HeaderValue::from_static(""));
+    let cache_control: HeaderValue = HeaderValue::from_str(&format!(
+        "public, max-age={}",
+        crate::feed::FEED_MAX_AGE_SECONDS
+    ))
+    .unwrap_or_else(|_| HeaderValue::from_static("public"));
+
+    let mut router: Router<WebServerState<S>> = Router::new();
+    for document in feeds.documents() {
+        let body: String = String::from(document.body());
+        let etag_text: String = String::from(document.etag());
+        let etag: HeaderValue =
+            HeaderValue::from_str(&etag_text).unwrap_or_else(|_| HeaderValue::from_static(""));
+        let content_type: HeaderValue = HeaderValue::from_static(document.content_type());
+        let last_modified: HeaderValue = last_modified.clone();
+        let cache_control: HeaderValue = cache_control.clone();
+
+        router = router.route(
+            document.path(),
+            get(move |headers: HeaderMap| {
+                let body: String = body.clone();
+                let etag_text: String = etag_text.clone();
+                let etag: HeaderValue = etag.clone();
+                let content_type: HeaderValue = content_type.clone();
+                let last_modified: HeaderValue = last_modified.clone();
+                let cache_control: HeaderValue = cache_control.clone();
+                async move {
+                    let fresh: bool = if_none_match(&headers, &etag_text);
+
+                    // Built rather than tupled so the headers are *inserted*:
+                    // appending leaves axum's own `text/plain` for the string
+                    // body in place ahead of ours, and a reader that reads the
+                    // first `Content-Type` then treats the feed as plain text.
+                    let mut response: Response = if fresh {
+                        StatusCode::NOT_MODIFIED.into_response()
+                    } else {
+                        (StatusCode::OK, body).into_response()
+                    };
+
+                    let headers: &mut HeaderMap = response.headers_mut();
+                    headers.insert(header::CACHE_CONTROL, cache_control);
+                    headers.insert(header::ETAG, etag);
+                    headers.insert(header::LAST_MODIFIED, last_modified);
+                    if !fresh {
+                        headers.insert(header::CONTENT_TYPE, content_type);
+                    }
+
+                    response
+                }
+            }),
+        );
+    }
+
+    router
+}
+
+/// Whether the request already holds this exact document.
+///
+/// `If-None-Match` is a comma-separated list, entries may be weak (`W/"…"`),
+/// and `*` matches anything that exists — so a bare string comparison against
+/// the header would 200 on requests that should 304.
+#[cfg(feature = "pages")]
+fn if_none_match(headers: &axum::http::HeaderMap, etag: &str) -> bool {
+    let Some(header) = headers
+        .get(axum::http::header::IF_NONE_MATCH)
+        .and_then(|value| value.to_str().ok())
+    else {
+        return false;
+    };
+
+    header.split(',').any(|candidate| {
+        let candidate: &str = candidate.trim();
+        candidate == "*" || candidate.trim_start_matches("W/") == etag
+    })
+}
+
+/// Names every immutable asset and the URL it is actually served at, once per
+/// boot.
+///
+/// Per-request logging cannot answer the question this exists for: a request
+/// for an immutable asset reaching the origin is indistinguishable from a first
+/// visit, a bot, a hard refresh or an evicted entry, and only one of those is a
+/// fault. What *is* checkable is whether the tier was wired up at all, and that
+/// is decided once, here. The hashed path is printed because it is the URL to
+/// `curl` when verifying the edge.
+fn log_immutable_assets(cache_buster: &crate::assets::CacheBuster) {
+    for (original, hashed) in cache_buster.cache() {
+        info!("immutable 1y  /{original} -> /{hashed}");
+    }
+}
+
+/// Names the generated documents and the tier each is served under.
+#[cfg(feature = "pages")]
+fn log_served_documents(well_known: &super::frontend::WellKnown) {
+    for path in ["/robots.txt", "/humans.txt", "/site.webmanifest"] {
+        info!("uncached      {path}");
+    }
+    for path in well_known.sitemaps.paths() {
+        info!("uncached      {path}");
+    }
+
+    if let Some(feeds) = well_known.feeds.as_ref() {
+        for document in feeds.documents() {
+            info!(
+                "cached {}m    {} (etag {})",
+                crate::feed::FEED_MAX_AGE_SECONDS / 60,
+                document.path(),
+                document.etag()
+            );
+        }
+    }
+}
+
+/// Everything a frontend contributes to the router, assembled.
+///
+/// A struct rather than a tuple of eight: `run` merges these into differently
+/// cached layers, and two routers transposed would put the analytics script
+/// behind `no-store`.
+#[cfg(feature = "pages")]
+struct Assembled<S> {
+    /// Pages, icons and the never-cached well-known documents.
+    routes: Router<WebServerState<S>>,
+    /// Endpoints to nest under the API prefix.
+    api: Router<WebServerState<S>>,
+    /// Vendor scripts, which carry their own cache policy.
+    proxy_scripts: Router<WebServerState<S>>,
+    /// Feed documents, which carry theirs.
+    feeds: Option<Router<WebServerState<S>>>,
+    runtime: crate::templates::FrontendRuntime,
+    base: crate::templates::BaseTemplateData,
+    templates: crate::templates::TemplateRegistry<'static>,
+    not_found: (
+        std::sync::Arc<crate::templates::PageTemplateData>,
+        std::sync::Arc<serde_json::Value>,
+    ),
+}
+
+/// Builds the frontend and sorts its routes by the cache policy each needs.
+#[cfg(feature = "pages")]
+fn assemble_frontend<S>(
+    params: super::frontend::FrontendParams<S>,
+    feed: Option<crate::feed::Feed>,
+    cache_buster: &crate::assets::CacheBuster,
+    environment: Environment,
+) -> Result<Assembled<S>, WebServerError>
+where
+    S: Clone + Send + Sync + 'static,
+{
+    let templates: crate::templates::TemplateRegistry<'static> =
+        crate::templates::TemplateRegistry::from_dir(crate::templates::TEMPLATE_ROOT)?;
+
+    let built: super::frontend::Frontend<S> =
+        super::frontend::Frontend::build(params, feed, cache_buster, environment)?;
+
+    log_served_documents(&built.well_known);
+
+    // Feeds are deliberately kept out of the never-cache layer: it strips
+    // conditional headers and stamps `no-store`, which on the most-polled
+    // document a site serves means re-sending every byte on every poll.
+    let feeds: Option<Router<WebServerState<S>>> = built.well_known.feeds.as_ref().map(feed_routes);
+
+    let mut routes: Router<WebServerState<S>> = well_known_routes(&built.well_known);
+    routes = routes.merge(icon_routes(cache_buster, built.has_svg_icon));
+
+    // The vendor scripts are likewise kept out: they carry the vendor's own
+    // cache policy, and stamping `no-store` over it would re-download the
+    // analytics script on every page view.
+    let (proxy_scripts, api) = proxy_routes(&built);
+
+    let not_found = built.not_found.clone();
+    routes = routes.merge(built.pages.into_router());
+
+    Ok(Assembled {
+        routes,
+        api,
+        proxy_scripts,
+        feeds,
+        runtime: built.runtime,
+        base: built.base,
+        templates,
+        not_found,
+    })
+}
+
 /// The first-party proxy routes.
 ///
 /// Split in two because the scripts sit at the root — where they read as
@@ -684,6 +927,69 @@ fn strip_api_prefix(path: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+
+    #[cfg(feature = "pages")]
+    mod conditional_get {
+        use axum::http::{HeaderMap, HeaderValue, header};
+
+        use crate::webserver::server::if_none_match;
+
+        const ETAG: &str = "\"abc123\"";
+
+        fn headers(value: &str) -> HeaderMap {
+            let mut headers: HeaderMap = HeaderMap::new();
+            headers.insert(
+                header::IF_NONE_MATCH,
+                HeaderValue::from_str(value).expect("a valid header"),
+            );
+            headers
+        }
+
+        #[test]
+        fn a_request_without_the_header_always_gets_the_body() {
+            let expected: bool = false;
+            let actual: bool = if_none_match(&HeaderMap::new(), ETAG);
+            assert_eq!(expected, actual);
+        }
+
+        #[test]
+        fn the_same_validator_means_the_reader_already_has_this_feed() {
+            let expected: bool = true;
+            let actual: bool = if_none_match(&headers(ETAG), ETAG);
+            assert_eq!(expected, actual);
+        }
+
+        #[test]
+        fn a_weak_validator_still_matches_because_feeds_need_no_byte_equality() {
+            let expected: bool = true;
+            let actual: bool = if_none_match(&headers("W/\"abc123\""), ETAG);
+            assert_eq!(expected, actual);
+        }
+
+        #[test]
+        fn a_star_matches_anything_that_exists() {
+            let expected: bool = true;
+            let actual: bool = if_none_match(&headers("*"), ETAG);
+            assert_eq!(expected, actual);
+        }
+
+        #[test]
+        fn one_match_anywhere_in_the_list_is_enough() {
+            // The header is a comma-separated list, so a naive string compare
+            // against the whole value would re-send the body to a reader that
+            // already holds it.
+            let expected: bool = true;
+            let actual: bool = if_none_match(&headers("\"other\", \"abc123\""), ETAG);
+            assert_eq!(expected, actual);
+        }
+
+        #[test]
+        fn a_stale_validator_gets_the_new_document() {
+            let expected: bool = false;
+            let actual: bool = if_none_match(&headers("\"stale\""), ETAG);
+            assert_eq!(expected, actual);
+        }
+    }
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::time::Duration;
