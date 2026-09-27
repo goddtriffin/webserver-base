@@ -2,6 +2,7 @@
 
 use std::future::{Future, IntoFuture};
 use std::net::{IpAddr, SocketAddr};
+use std::path::PathBuf;
 use std::str::FromStr;
 
 use axum::extract::DefaultBodyLimit;
@@ -56,6 +57,7 @@ pub struct WebServer<S = ()> {
     app: S,
 
     body_limit: usize,
+    root_dir: PathBuf,
     router: Router<WebServerState<S>>,
 
     #[cfg(feature = "pages")]
@@ -106,6 +108,8 @@ where
             environment,
             app,
             body_limit: DEFAULT_BODY_LIMIT,
+            // Empty joins to the bare relative path: the working directory.
+            root_dir: PathBuf::new(),
             router: Router::new(),
             #[cfg(feature = "pages")]
             frontend: None,
@@ -142,6 +146,19 @@ where
     #[must_use]
     pub const fn body_limit(mut self, body_limit: usize) -> Self {
         self.body_limit = body_limit;
+        self
+    }
+
+    /// Where `html/`, `static/` and `cache-buster.json` are read from.
+    /// Defaults to the working directory.
+    ///
+    /// Covers every file the server reads, at boot and per request. It does
+    /// not move the build-time asset pipeline, which always runs in the working
+    /// directory. Set it when the process cannot run from the built site: a
+    /// `cargo test` runs from its crate's directory, not from `bin/`.
+    #[must_use]
+    pub fn root_dir(mut self, root_dir: impl Into<PathBuf>) -> Self {
+        self.root_dir = root_dir.into();
         self
     }
 
@@ -207,6 +224,25 @@ where
         self
     }
 
+    /// The finished application, without binding a socket.
+    ///
+    /// Exactly the router [`run`](WebServer::run) serves — pages, the 404, the
+    /// well-known documents, the cache policy, tracing and the body limit — so
+    /// driving it with `tower::ServiceExt::oneshot` tests what ships. Boot
+    /// validation runs here too: `Ok` is a server `run` would have started.
+    ///
+    /// It never runs the drain window or [`AppShutdown::on_shutdown`];
+    /// triggering `shutdown` reaches only handlers that listen for it. A
+    /// `.layer()` added on top of the result is outside what this library
+    /// guarantees.
+    ///
+    /// # Errors
+    ///
+    /// [`WebServerError`] if the frontend cannot be assembled.
+    pub fn into_router(self, shutdown: Shutdown) -> Result<Router, WebServerError> {
+        Ok(self.assemble(shutdown)?.router)
+    }
+
     /// Binds, serves, and drains.
     ///
     /// # Errors
@@ -218,12 +254,32 @@ where
     where
         S: AppShutdown,
     {
+        let Assembled {
+            router,
+            state,
+            host,
+            port,
+        } = self.assemble(shutdown.clone())?;
+
+        serve_on(router, &host, port, shutdown, async move {
+            state.app().on_shutdown().await;
+        })
+        .await
+    }
+
+    /// Everything [`run`](WebServer::run) does before it binds.
+    ///
+    /// The one assembly path, so the router [`into_router`](WebServer::into_router)
+    /// hands a test cannot drift from the one production serves.
+    #[instrument(skip_all)]
+    fn assemble(self, shutdown: Shutdown) -> Result<Assembled<S>, WebServerError> {
         let Self {
             host,
             port,
             environment,
             app,
             body_limit,
+            root_dir,
             router,
             #[cfg(feature = "pages")]
             frontend,
@@ -240,7 +296,8 @@ where
 
         // Hashing is a build step, so this only ever reads what the build
         // produced. A project with no `static/` gets an empty map.
-        let cache_buster: crate::assets::CacheBuster = crate::assets::CacheBuster::load()?;
+        let cache_buster: crate::assets::CacheBuster =
+            crate::assets::CacheBuster::load_in(&root_dir)?;
 
         let mut no_cache: Router<WebServerState<S>> = router;
         let mut built_in: Router<WebServerState<S>> = Router::new().route("/health", get(health));
@@ -265,7 +322,7 @@ where
 
         #[cfg(feature = "pages")]
         if let Some(params) = frontend {
-            let assembled: Assembled<S> =
+            let assembled: AssembledFrontend<S> =
                 assemble_frontend(params, feed, &cache_buster, environment)?;
 
             no_cache = no_cache.merge(assembled.routes);
@@ -304,7 +361,7 @@ where
             host: host.clone(),
             port,
             environment,
-            shutdown: shutdown.clone(),
+            shutdown,
             #[cfg(feature = "templates")]
             base,
             #[cfg(feature = "templates")]
@@ -315,14 +372,12 @@ where
             app,
         });
 
-        // The router takes the state by value; cleanup needs it after serving
-        // ends, and `WebServerState` is an `Arc` so this costs a refcount.
-        let cleanup: WebServerState<S> = state.clone();
-
         // Applied outermost-last, so the body cap runs before tracing sees a
         // request it may never finish reading.
+        // The router takes the state by value; `run`'s cleanup needs it after
+        // serving ends, and `WebServerState` is an `Arc` so this is a refcount.
         let app_router: Router = app_router
-            .with_state(state)
+            .with_state(state.clone())
             .layer(
                 TraceLayer::new_for_http()
                     // The span carries the method and URI, and the response
@@ -343,11 +398,24 @@ where
             )
             .layer(DefaultBodyLimit::max(body_limit));
 
-        serve_on(app_router, &host, port, shutdown, async move {
-            cleanup.app().on_shutdown().await;
+        Ok(Assembled {
+            router: app_router,
+            state,
+            host,
+            port,
         })
-        .await
     }
+}
+
+/// A server ready to bind: what [`WebServer::run`] serves and what it cleans
+/// up afterwards.
+struct Assembled<S> {
+    router: Router,
+    /// Kept beside the router because `with_state` consumes it, and the
+    /// shutdown hook runs after serving ends.
+    state: WebServerState<S>,
+    host: String,
+    port: u16,
 }
 
 /// Attaches the 404 fallback.
@@ -481,7 +549,9 @@ where
         Router::new()
             .nest_service(
                 "/static",
-                tower_http::services::ServeDir::new(crate::assets::STATIC_DIRECTORY),
+                tower_http::services::ServeDir::new(
+                    cache_buster.root().join(crate::assets::STATIC_DIRECTORY),
+                ),
             )
             .layer(axum::middleware::from_fn(
                 crate::assets::CacheBuster::forever_cache_middleware,
@@ -611,8 +681,7 @@ where
     let mut router: Router<WebServerState<S>> = Router::new();
     for (route, original) in icons {
         // Existence was proved at boot, so this is a resolution, not a check.
-        let hashed: String = cache_buster.get_file(&original);
-        router = router.nest_service(route, ServeFile::new(hashed));
+        router = router.nest_service(route, ServeFile::new(cache_buster.file(&original)));
     }
     router
 }
@@ -762,7 +831,7 @@ fn log_served_documents(well_known: &super::frontend::WellKnown) {
 /// cached layers, and two routers transposed would put the analytics script
 /// behind `no-store`.
 #[cfg(feature = "pages")]
-struct Assembled<S> {
+struct AssembledFrontend<S> {
     /// Pages, icons and the never-cached well-known documents.
     routes: Router<WebServerState<S>>,
     /// Endpoints to nest under the API prefix.
@@ -787,12 +856,14 @@ fn assemble_frontend<S>(
     feed: Option<crate::feed::Feed>,
     cache_buster: &crate::assets::CacheBuster,
     environment: Environment,
-) -> Result<Assembled<S>, WebServerError>
+) -> Result<AssembledFrontend<S>, WebServerError>
 where
     S: Clone + Send + Sync + 'static,
 {
     let templates: crate::templates::TemplateRegistry<'static> =
-        crate::templates::TemplateRegistry::from_dir(crate::templates::TEMPLATE_ROOT)?;
+        crate::templates::TemplateRegistry::from_dir(
+            cache_buster.root().join(crate::templates::TEMPLATE_ROOT),
+        )?;
 
     let built: super::frontend::Frontend<S> =
         super::frontend::Frontend::build(params, feed, cache_buster, environment)?;
@@ -815,7 +886,7 @@ where
     let not_found = built.not_found.clone();
     routes = routes.merge(built.pages.into_router());
 
-    Ok(Assembled {
+    Ok(AssembledFrontend {
         routes,
         api,
         proxy_scripts,

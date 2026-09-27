@@ -68,14 +68,14 @@ pub fn validate_declared(
 /// [`CacheBusterError`] if the source is missing, ambiguous, or wrongly sized,
 /// or if a derived icon is absent or the wrong size.
 pub fn validate_icons(cache_buster: &CacheBuster) -> Result<IconSource, CacheBusterError> {
-    validate_favicon_directory()?;
+    validate_favicon_directory(cache_buster.root())?;
 
-    let source: IconSource = icons::resolve_source(cache_buster.manifest())?;
+    let source: IconSource =
+        icons::resolve_source_in(cache_buster.root(), cache_buster.manifest())?;
 
     for icon in &DERIVED {
         let logical: String = format!("{FAVICON_DIRECTORY}/{}", icon.file_name);
-        let hashed: String = cache_buster.get_file(&logical);
-        let path: PathBuf = PathBuf::from(&hashed);
+        let path: PathBuf = cache_buster.file(&logical);
 
         if !path.is_file() {
             return Err(CacheBusterError::IconMismatch {
@@ -110,9 +110,9 @@ pub fn validate_icons(cache_buster: &CacheBuster) -> Result<IconSource, CacheBus
 /// A stale `favicon-16.png` from a previous design, or a size somebody dropped
 /// in expecting it to be picked up, is invisible until a wrong picture shows up
 /// in a browser tab. A closed set makes that a boot failure instead.
-fn validate_favicon_directory() -> Result<(), CacheBusterError> {
-    let directory: &Path = Path::new(FAVICON_DIRECTORY);
-    let Ok(entries) = std::fs::read_dir(directory) else {
+fn validate_favicon_directory(root: &Path) -> Result<(), CacheBusterError> {
+    let directory: PathBuf = root.join(FAVICON_DIRECTORY);
+    let Ok(entries) = std::fs::read_dir(&directory) else {
         // Absent entirely is a missing *source*, which says something more
         // useful than "the directory has odd contents".
         return Ok(());

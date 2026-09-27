@@ -25,6 +25,8 @@ pub use generate::{
 pub use icons::{DERIVED, IconSource, SOURCE_PNG_SIZE, dimensions, resolve_source};
 pub use manifest::{MANIFEST_PATH, Manifest, TYPESCRIPT_MODULE_PATH};
 pub use modified::content_modified;
+#[cfg(feature = "pages")]
+pub(crate) use modified::content_modified_in;
 #[cfg(feature = "templates")]
 pub use probe::probe_social_image;
 pub use validate::{validate_declared, validate_icons};

@@ -39,11 +39,15 @@ impl Manifest {
     /// [`CacheBusterError::ReadFile`] if it exists but cannot be read, or
     /// [`CacheBusterError::ParseManifest`] if it is not valid JSON.
     pub fn load_or_empty() -> Result<Self, CacheBusterError> {
-        let path: &Path = Path::new(MANIFEST_PATH);
-        if !path.is_file() {
+        Self::load_or_empty_in(Path::new(""))
+    }
+
+    /// [`load_or_empty`](Self::load_or_empty), under `root`.
+    pub(crate) fn load_or_empty_in(root: &Path) -> Result<Self, CacheBusterError> {
+        if !root.join(MANIFEST_PATH).is_file() {
             return Ok(Self::default());
         }
-        Self::load()
+        Self::load_in(root)
     }
 
     /// Reads the manifest.
@@ -53,7 +57,12 @@ impl Manifest {
     /// [`CacheBusterError::ReadFile`] if it cannot be read, or
     /// [`CacheBusterError::ParseManifest`] if it is not valid JSON.
     pub fn load() -> Result<Self, CacheBusterError> {
-        let path: PathBuf = PathBuf::from(MANIFEST_PATH);
+        Self::load_in(Path::new(""))
+    }
+
+    /// [`load`](Self::load), under `root`.
+    pub(crate) fn load_in(root: &Path) -> Result<Self, CacheBusterError> {
+        let path: PathBuf = root.join(MANIFEST_PATH);
         let contents: String =
             std::fs::read_to_string(&path).map_err(|source| CacheBusterError::ReadFile {
                 path: path.clone(),
@@ -113,7 +122,12 @@ impl Manifest {
     ///
     /// [`CacheBusterError::WriteManifest`] if it cannot be created or written.
     pub fn write_json(&self) -> Result<(), CacheBusterError> {
-        let path: PathBuf = PathBuf::from(MANIFEST_PATH);
+        self.write_json_in(Path::new(""))
+    }
+
+    /// [`write_json`](Self::write_json), under `root`.
+    pub(crate) fn write_json_in(&self, root: &Path) -> Result<(), CacheBusterError> {
+        let path: PathBuf = root.join(MANIFEST_PATH);
         let file: File = File::create(&path).map_err(|source| CacheBusterError::WriteManifest {
             path: path.clone(),
             source,
@@ -136,7 +150,12 @@ impl Manifest {
     /// [`CacheBusterError::WriteManifest`] if the file cannot be created or
     /// written.
     pub fn write_typescript(&self) -> Result<(), CacheBusterError> {
-        let path: PathBuf = PathBuf::from(TYPESCRIPT_MODULE_PATH);
+        self.write_typescript_in(Path::new(""))
+    }
+
+    /// [`write_typescript`](Self::write_typescript), under `root`.
+    pub(crate) fn write_typescript_in(&self, root: &Path) -> Result<(), CacheBusterError> {
+        let path: PathBuf = root.join(TYPESCRIPT_MODULE_PATH);
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).map_err(|source| CacheBusterError::WriteManifest {
                 path: parent.to_path_buf(),
