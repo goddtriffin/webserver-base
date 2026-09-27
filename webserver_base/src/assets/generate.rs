@@ -88,26 +88,31 @@ impl Phase {
 /// rendered, a file cannot be read or renamed, or the manifest cannot be
 /// written.
 pub fn generate_static_assets(phase: Phase) -> Result<(), CacheBusterError> {
-    let root: &Path = Path::new(STATIC_DIRECTORY);
-    if !root.is_dir() {
+    generate_static_assets_in(Path::new(""), phase)
+}
+
+/// [`generate_static_assets`], under `root`.
+pub(crate) fn generate_static_assets_in(root: &Path, phase: Phase) -> Result<(), CacheBusterError> {
+    let static_directory: PathBuf = root.join(STATIC_DIRECTORY);
+    if !static_directory.is_dir() {
         return Err(CacheBusterError::MissingStaticDirectory {
-            path: root.to_path_buf(),
+            path: static_directory,
         });
     }
 
     // Merge rather than clobber: phase two must not discard phase one's work,
     // and a re-run must find already-hashed files by their hashed names.
-    let mut manifest: Manifest = Manifest::load_or_empty()?;
+    let mut manifest: Manifest = Manifest::load_or_empty_in(root)?;
 
     if phase == Phase::NonScripts {
-        super::icons::generate_missing_icons(&manifest)?;
+        super::icons::generate_missing_icons_in(root, &manifest)?;
     }
 
     manifest.extend(hash_tree(root, phase)?);
-    manifest.write_json()?;
+    manifest.write_json_in(root)?;
 
     if phase == Phase::NonScripts {
-        manifest.write_typescript()?;
+        manifest.write_typescript_in(root)?;
         info!(
             "hashed {} static asset(s); wrote the manifest and {TYPESCRIPT_MODULE_PATH}",
             manifest.len()
@@ -122,11 +127,16 @@ pub fn generate_static_assets(phase: Phase) -> Result<(), CacheBusterError> {
     Ok(())
 }
 
-/// Walks `root`, renaming every file this phase owns to include a hash of its
-/// contents.
+/// Walks `root`'s static directory, renaming every file this phase owns to
+/// include a hash of its contents.
+///
+/// Keys and values are relative to `root`: they are URL paths as much as file
+/// paths, and a manifest that named the directory it was built in would serve
+/// nothing once deployed anywhere else.
 fn hash_tree(root: &Path, phase: Phase) -> Result<BTreeMap<String, String>, CacheBusterError> {
+    let static_directory: PathBuf = root.join(STATIC_DIRECTORY);
     let mut cache: BTreeMap<String, String> = BTreeMap::new();
-    let mut directories: Vec<PathBuf> = vec![root.to_path_buf()];
+    let mut directories: Vec<PathBuf> = vec![static_directory.clone()];
 
     while let Some(directory) = directories.pop() {
         let entries =
@@ -147,7 +157,8 @@ fn hash_tree(root: &Path, phase: Phase) -> Result<BTreeMap<String, String>, Cach
                 directories.push(path);
                 continue;
             }
-            if !phase.owns(&path) {
+            let relative: &Path = path.strip_prefix(root).unwrap_or(&path);
+            if !phase.owns(relative) {
                 continue;
             }
             // Re-hashing an already-hashed name is the bug this whole pipeline
@@ -158,7 +169,7 @@ fn hash_tree(root: &Path, phase: Phase) -> Result<BTreeMap<String, String>, Cach
                 continue;
             }
 
-            let hashed: PathBuf = content_hashed_path(&path, root)?;
+            let hashed: PathBuf = content_hashed_path(&path, &static_directory)?;
             fs::rename(&path, &hashed).map_err(|source| CacheBusterError::Rename {
                 from: path.clone(),
                 to: hashed.clone(),
@@ -166,8 +177,12 @@ fn hash_tree(root: &Path, phase: Phase) -> Result<BTreeMap<String, String>, Cach
             })?;
 
             cache.insert(
-                path.to_string_lossy().to_string(),
-                hashed.to_string_lossy().to_string(),
+                relative.to_string_lossy().to_string(),
+                hashed
+                    .strip_prefix(root)
+                    .unwrap_or(&hashed)
+                    .to_string_lossy()
+                    .to_string(),
             );
         }
     }

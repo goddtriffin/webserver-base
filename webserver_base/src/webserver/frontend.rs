@@ -154,7 +154,7 @@ where
             .map(|url| url.map_images(|image| cache_buster.get_file(image)))
             .collect();
         let last_modified: Option<chrono::DateTime<chrono::Utc>> =
-            crate::assets::content_modified(&["html", "static"]);
+            crate::assets::content_modified_in(cache_buster.root(), &["html", "static"]);
         let sitemaps: SitemapSet =
             build_sitemaps(params.base.base_url(), &sitemap_urls, last_modified)
                 .map_err(WebServerError::Sitemap)?;
@@ -318,8 +318,7 @@ fn feed_site(base: &BaseTemplateData, cache_buster: &CacheBuster) -> FeedSite {
 
 /// Resolves and measures the social card image on disk.
 fn probe_social_image(base: &BaseTemplateData, cache_buster: &CacheBuster) -> SocialImageMetadata {
-    let hashed: String = cache_buster.get_file(base.social_image());
-    crate::assets::probe_social_image(&hashed)
+    crate::assets::probe_social_image(cache_buster.file(base.social_image()))
 }
 
 /// `robots.txt`, naming the sitemap index, then the feed, then every url set.

@@ -28,6 +28,9 @@ use super::manifest::{MANIFEST_PATH, Manifest};
 #[derive(Debug, Clone, Default)]
 pub struct CacheBuster {
     manifest: Manifest,
+    /// The directory the manifest was read from. Every hashed path is relative
+    /// to it on disk, and to `/` as a URL.
+    root: PathBuf,
 }
 
 impl CacheBuster {
@@ -51,17 +54,42 @@ impl CacheBuster {
     /// manifest, or [`CacheBusterError::ParseManifest`] if it is malformed.
     #[instrument(skip_all)]
     pub fn load() -> Result<Self, CacheBusterError> {
-        if !Path::new(STATIC_DIRECTORY).is_dir() {
-            return Ok(Self::empty());
+        Self::load_in(Path::new(""))
+    }
+
+    /// [`load`](Self::load), under `root`.
+    pub(crate) fn load_in(root: &Path) -> Result<Self, CacheBusterError> {
+        let root: PathBuf = root.to_path_buf();
+        if !root.join(STATIC_DIRECTORY).is_dir() {
+            return Ok(Self {
+                manifest: Manifest::default(),
+                root,
+            });
         }
-        if !Path::new(MANIFEST_PATH).is_file() {
+        let manifest_path: PathBuf = root.join(MANIFEST_PATH);
+        if !manifest_path.is_file() {
             return Err(CacheBusterError::MissingManifest {
-                path: PathBuf::from(MANIFEST_PATH),
+                path: manifest_path,
             });
         }
         Ok(Self {
-            manifest: Manifest::load()?,
+            manifest: Manifest::load_in(&root)?,
+            root,
         })
+    }
+
+    /// The directory every hashed path is relative to on disk.
+    pub(crate) fn root(&self) -> &Path {
+        &self.root
+    }
+
+    /// Where [`get_file`](Self::get_file)'s result lives on disk.
+    ///
+    /// The one place a URL path becomes a file path. A leading `/` is dropped
+    /// first, because joining an absolute path replaces the root outright.
+    pub(crate) fn file(&self, original: &str) -> PathBuf {
+        self.root
+            .join(self.get_file(original).trim_start_matches('/'))
     }
 
     /// The hashed path for `original`, or `original` itself when it is not a

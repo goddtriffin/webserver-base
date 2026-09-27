@@ -114,8 +114,16 @@ impl IconSource {
 /// [`CacheBusterError::AmbiguousFavicon`] if both do, or
 /// [`CacheBusterError::FaviconDimensions`] if a PNG source is the wrong size.
 pub fn resolve_source(manifest: &Manifest) -> Result<IconSource, CacheBusterError> {
-    let svg: Option<PathBuf> = existing(manifest, FAVICON_SVG_SOURCE);
-    let png: Option<PathBuf> = existing(manifest, FAVICON_PNG_SOURCE);
+    resolve_source_in(Path::new(""), manifest)
+}
+
+/// [`resolve_source`], under `root`.
+pub(crate) fn resolve_source_in(
+    root: &Path,
+    manifest: &Manifest,
+) -> Result<IconSource, CacheBusterError> {
+    let svg: Option<PathBuf> = existing(root, manifest, FAVICON_SVG_SOURCE);
+    let png: Option<PathBuf> = existing(root, manifest, FAVICON_PNG_SOURCE);
 
     match (svg, png) {
         (Some(_), Some(_)) => Err(CacheBusterError::AmbiguousFavicon),
@@ -147,12 +155,25 @@ pub fn resolve_source(manifest: &Manifest) -> Result<IconSource, CacheBusterErro
 /// [`CacheBusterError`] if the source cannot be resolved, parsed, rasterised, or
 /// an output cannot be written.
 pub fn generate_missing_icons(manifest: &Manifest) -> Result<(), CacheBusterError> {
-    let source: IconSource = resolve_source(manifest)?;
+    generate_missing_icons_in(Path::new(""), manifest)
+}
+
+/// [`generate_missing_icons`], under `root`.
+pub(crate) fn generate_missing_icons_in(
+    root: &Path,
+    manifest: &Manifest,
+) -> Result<(), CacheBusterError> {
+    let source: IconSource = resolve_source_in(root, manifest)?;
 
     let outstanding: Vec<&DerivedIcon> = DERIVED
         .iter()
         .filter(|icon| {
-            existing(manifest, &format!("{FAVICON_DIRECTORY}/{}", icon.file_name)).is_none()
+            existing(
+                root,
+                manifest,
+                &format!("{FAVICON_DIRECTORY}/{}", icon.file_name),
+            )
+            .is_none()
         })
         .collect();
     if outstanding.is_empty() {
@@ -167,7 +188,7 @@ pub fn generate_missing_icons(manifest: &Manifest) -> Result<(), CacheBusterErro
             IconFormat::Ico => wrap_png_in_ico(&png, icon.size),
         };
 
-        let path: PathBuf = Path::new(FAVICON_DIRECTORY).join(icon.file_name);
+        let path: PathBuf = root.join(FAVICON_DIRECTORY).join(icon.file_name);
         std::fs::write(&path, bytes)
             .map_err(|source| CacheBusterError::WriteIcon { path, source })?;
         info!("generated `{FAVICON_DIRECTORY}/{}`", icon.file_name);
@@ -254,12 +275,12 @@ impl Renderer {
 /// still `favicon.svg`, and after it the manifest knows it as
 /// `favicon.<hash>.svg`. It is not a fallback for a *missing* asset — that is
 /// caught at boot, loudly.
-fn existing(manifest: &Manifest, logical: &str) -> Option<PathBuf> {
-    let hashed: PathBuf = PathBuf::from(manifest.resolve(logical));
+fn existing(root: &Path, manifest: &Manifest, logical: &str) -> Option<PathBuf> {
+    let hashed: PathBuf = root.join(manifest.resolve(logical));
     if hashed.is_file() {
         return Some(hashed);
     }
-    let plain: PathBuf = PathBuf::from(logical);
+    let plain: PathBuf = root.join(logical);
     plain.is_file().then_some(plain)
 }
 

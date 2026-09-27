@@ -90,9 +90,11 @@ opt-in, so a sidecar serving one health check is a valid server.
 | `new` / `with_state` | explicit host, port and environment; `with_state` carries app state reachable as `state.app()` |
 | `from_env` / `from_env_with_state` | reads `WSB_ENVIRONMENT` (required), `WSB_HOST` (defaults `127.0.0.1` locally, `0.0.0.0` in production) and `WSB_PORT` (defaults `8080`) |
 | `body_limit` | request body cap, default 256 KiB — raise it for uploads |
+| `root_dir` | where `html/`, `static/` and `cache-buster.json` are read from, default the working directory — see [Testing](#testing-with-into_router) |
 | `nest` / `merge` / `nest_service` | your own routes |
 | `frontend` | declares this server a website; see below |
 | `run` | binds, serves, drains, and runs the state's `AppShutdown` cleanup |
+| `into_router` | everything `run` does before binding: the finished `Router`, for `oneshot` tests or embedding |
 
 Always on, no method to enable them: `GET /api/v1/health`, the `/api/v1` prefix
 itself, and the graceful-drain window.
@@ -142,9 +144,47 @@ The library cannot deduplicate that — each `WebServer` builds its own
 `WebServerState`, and only your application knows what they share. Guard
 anything that would misbehave twice behind a `OnceCell` of your own.
 
-Static assets are **presence-detected**: if a `static/` directory exists the
-server serves `/static` and loads the manifest; if not, it does neither. There is
-no `.assets()` call.
+Static assets are **presence-detected**: if a `static/` directory exists under
+`root_dir` the server serves `/static` and loads the manifest; if not, it does
+neither. There is no `.assets()` call.
+
+### Testing with `into_router`
+
+`into_router(shutdown)` returns exactly the `Router` that `run` serves — pages,
+the 404, the well-known documents, the cache policy, tracing and the body limit
+— without binding a socket. Drive it with `tower::ServiceExt::oneshot`:
+
+```rust
+const BIN: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../bin");
+
+let server: WebServer = WebServer::new("127.0.0.1", 0, Environment::Local).root_dir(BIN);
+let router: Router = web_server(server, settings).into_router(Shutdown::manual())?;
+let response: Response = router.oneshot(Request::get("/").body(Body::empty())?).await?;
+```
+
+- **Boot validation still runs**, so `Ok` means `run` would have started. A
+  frontend test therefore needs the *built* site: point `root_dir` at what your
+  asset build produces (`bin/`, above, from a workspace member) and build the
+  assets before `cargo test`. There is no lenient test mode — it would pass
+  exactly the misconfiguration the boot check exists to catch.
+- **`root_dir` is per server, not per process.** `cargo test` runs from the
+  crate's own directory, and parallel tests can each point at their own tree;
+  changing the working directory could do neither.
+- **Put the builder in your library, not `main`.** A binary-only crate's tests
+  cannot reach `main`, so they would test a copy of the builder chain. Expose
+  `fn web_server(server: WebServer, settings: Settings) -> WebServer`: `main`
+  passes `WebServer::from_env()?` and a test passes one with `root_dir`. Keep
+  environment reads in `main`, so a test builds `Settings` as plain data instead
+  of mutating process-wide variables. `template_web_server` is the worked
+  example.
+- **A handler needs no fixtures.** A server without `frontend` boots from any
+  root, so `WebServer::with_state(..).merge(routes).into_router(..)` hands the
+  handler a real `WebServerState`. There is deliberately no public constructor
+  for one: the only state a test can see is one `run` could have built.
+- **Not covered:** the drain window and `AppShutdown::on_shutdown` never run.
+  `shutdown.trigger()` reaches only handlers listening on `state.shutdown()`.
+- A `.layer()` added to the returned router is outside what the library
+  guarantees.
 
 ## `frontend` — the line between a site and a service
 
@@ -806,6 +846,9 @@ static/
 cache-buster.json              build output — gitignored
 static/script/generated/       build output — gitignored
 ```
+
+Where that tree lives is `root_dir`, defaulting to the working directory — the
+build pipeline itself always runs in the working directory.
 
 Fixed and not configurable: the `html/` and `static/` directory names, the
 `/api/v1` prefix, the `theme` storage key, the sitemap route shape, the derived

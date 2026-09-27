@@ -26,9 +26,14 @@ use tracing::error;
 /// can produce a future date; both are worse than saying nothing.
 #[must_use]
 pub fn content_modified(directories: &[&str]) -> Option<DateTime<Utc>> {
+    content_modified_in(Path::new(""), directories)
+}
+
+/// [`content_modified`], with `directories` under `root`.
+pub(crate) fn content_modified_in(root: &Path, directories: &[&str]) -> Option<DateTime<Utc>> {
     let newest: DateTime<Utc> = directories
         .iter()
-        .filter_map(|directory| newest_mtime(Path::new(directory)))
+        .filter_map(|directory| newest_mtime(&root.join(directory)))
         .chain(current_exe_mtime())
         .max()?;
 

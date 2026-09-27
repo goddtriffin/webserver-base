@@ -10,6 +10,8 @@ mod bootstrap;
 mod error;
 #[cfg(feature = "pages")]
 mod frontend;
+#[cfg(all(test, feature = "pages"))]
+mod into_router_tests;
 #[cfg(feature = "pages")]
 mod pages;
 mod server;

@@ -13,6 +13,11 @@ keywords.workspace = true
 categories.workspace = true
 include.workspace = true
 
+# A library as well as a binary so the tests can build the exact server `main`
+# runs; a binary-only crate would leave them copying the builder chain.
+[lib]
+path = "src/lib.rs"
+
 [[bin]]
 path = "src/main.rs"
 name = "template-web-server"
@@ -31,3 +36,11 @@ webserver-base = { path = "../webserver_base", features = [
   "observability",
   "preset",
 ] }
+
+# The test drives the router with `tower::ServiceExt::oneshot`, which is how
+# every consumer tests without binding a socket. Dev-only: the binary is
+# unaffected.
+[dev-dependencies]
+axum = { workspace = true }
+tokio = { workspace = true }
+tower = { workspace = true }

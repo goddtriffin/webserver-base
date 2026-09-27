@@ -79,8 +79,8 @@ gen_static_assets: # derives the icon set, then hashes everything but the script
 gen_static_scripts: # hashes the built JavaScript, once it exists
 	cd bin && WSB_ENVIRONMENT=local ./template-web-server gen-static-scripts
 
-.PHONY: dev
-dev: ## runs the development binary
+.PHONY: assets
+assets: ## builds the site into bin/, which dev serves and the tests drive
 	# Order matters. Icons and hashing must precede the JS build, because the
 	# bundler inlines the manifest; the scripts are hashed after they exist.
 	cargo build --package template-web-server --bin template-web-server
@@ -90,6 +90,9 @@ dev: ## runs the development binary
 	$(MAKE) gen_static_assets
 	$(MAKE) gen_js
 	$(MAKE) gen_static_scripts
+
+.PHONY: dev
+dev: assets ## runs the development binary
 	set -e; \
 	PORT="$${PORT:-$$(deno run --allow-net --allow-run=lsof static/script/webserver-base/free-port.ts template-web-server)}"; \
 	echo "==> http://127.0.0.1:$$PORT"; \
@@ -110,7 +113,7 @@ lint: ## lints the codebase
 	cargo fmt
 
 .PHONY: test
-test: ## runs tests
+test: assets ## runs tests; the template's tests serve the bin/ that assets builds
 	deno check static/script/
 	# --allow-net: free-port's tests bind real sockets to verify port detection
 	deno test --allow-net
