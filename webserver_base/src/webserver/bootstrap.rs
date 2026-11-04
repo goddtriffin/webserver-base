@@ -43,14 +43,7 @@ use super::shutdown::Shutdown;
 ///
 /// If the Tokio runtime cannot be built. There is no useful way to continue,
 /// and no server to report it to yet.
-pub fn bootstrap_with_release<F, Fut, T, E>(
-    #[cfg_attr(
-        not(feature = "observability"),
-        expect(unused_variables, reason = "only the Sentry release reads it")
-    )]
-    release: &str,
-    body: F,
-) -> Result<T, E>
+pub fn bootstrap_with_release<F, Fut, T, E>(release: &str, body: F) -> Result<T, E>
 where
     F: FnOnce(Shutdown) -> Fut,
     Fut: Future<Output = Result<T, E>>,
@@ -76,6 +69,8 @@ where
 
     // Resolved here rather than in every `main`: it is the same three lines in
     // every project, and one of them is easy to get in the wrong order.
+    super::telemetry::set_release(release);
+
     #[cfg(feature = "observability")]
     let _guard: crate::observability::ObservabilityGuard = {
         let environment: crate::Environment = crate::Environment::from_env()

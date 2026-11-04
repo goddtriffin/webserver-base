@@ -73,6 +73,9 @@ pub use axum_extra;
 pub use chrono;
 #[cfg(feature = "templates")]
 pub use handlebars;
+/// Record your own metrics (`counter!`, `gauge!`, `histogram!`); every server exports them on `/metrics`.
+#[cfg(feature = "webserver")]
+pub use metrics;
 #[cfg(any(feature = "analytics", feature = "telegram"))]
 pub use reqwest;
 #[cfg(feature = "observability")]

@@ -57,6 +57,8 @@ webserver = [
   "dep:tower",
   "dep:tower-http",
   "dep:tokio",
+  "dep:metrics",
+  "dep:metrics-exporter-prometheus",
   "dep:md5",
   "dep:regex",
   "dep:chrono",
@@ -100,6 +102,10 @@ axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
 tower = { workspace = true, optional = true }
 tower-http = { workspace = true, optional = true }
+
+# webserver (Prometheus metrics on every server)
+metrics = { workspace = true, optional = true }
+metrics-exporter-prometheus = { workspace = true, optional = true }
 
 # webserver (serve loop), telegram (delivery worker)
 tokio = { workspace = true, optional = true }
