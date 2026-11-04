@@ -889,7 +889,7 @@ where
     // analytics script on every page view.
     let (proxy_scripts, api) = proxy_routes(&built);
 
-    routes = routes.merge(built.pages.into_router());
+    routes = routes.merge(built.pages.into_router()?);
 
     Ok(AssembledFrontend {
         routes,

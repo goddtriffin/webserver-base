@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use axum::Router;
 use axum::body::Body;
 use axum::extract::{Path as UrlPath, State};
-use axum::http::{Request, StatusCode, Uri, header};
+use axum::http::{Method, Request, StatusCode, Uri, header};
 use axum::response::Response;
 use handlebars::handlebars_helper;
 use serde_json::json;
@@ -75,6 +75,15 @@ fn copy_tree(from: &Path, to: &Path) {
 }
 
 fn frontend() -> FrontendParams {
+    frontend_with(
+        Pages::new()
+            .static_page(PageTemplateData::new("home", "Home", "/"), ())
+            .dynamic_page("/things/{slug}", axum::routing::get(thing))
+            .unlisted(),
+    )
+}
+
+fn frontend_with(pages: Pages) -> FrontendParams {
     FrontendParams::new(
         BaseTemplateData::new(BaseTemplateDataParams {
             project: String::from("Fixture"),
@@ -101,10 +110,7 @@ fn frontend() -> FrontendParams {
                 { "href": "/things", "label": "Things" },
             ],
         })),
-        Pages::new()
-            .static_page(PageTemplateData::new("home", "Home", "/"), ())
-            .dynamic_page("/things/{slug}", axum::routing::get(thing))
-            .unlisted(),
+        pages,
         AnalyticsConfig::new("fixture"),
         "https://abc123@o4504844394627072.ingest.sentry.io/4504862450515968",
     )
@@ -123,10 +129,15 @@ fn site_router_with(root: &Path, params: FrontendParams) -> Result<Router, WebSe
 }
 
 async fn get(router: &Router, uri: &str) -> Response {
+    request(router, Method::GET, uri).await
+}
+
+async fn request(router: &Router, method: Method, uri: &str) -> Response {
     router
         .clone()
         .oneshot(
             Request::builder()
+                .method(method)
                 .uri(uri)
                 .body(Body::empty())
                 .expect("a valid request"),
@@ -353,4 +364,149 @@ async fn a_server_with_no_frontend_boots_from_a_root_holding_nothing() {
     let expected: StatusCode = StatusCode::OK;
     let actual: StatusCode = get(&router, "/api/v1/health").await.status();
     assert_eq!(expected, actual);
+}
+
+/// Every page shape a trailing-slash alias has to cover, plus the two exempt.
+fn slash_pages() -> Pages {
+    Pages::new()
+        .static_page(PageTemplateData::new("home", "Home", "/"), ())
+        .static_page(PageTemplateData::new("home", "About", "/about"), ())
+        .dynamic_page("/plain", axum::routing::any(|| async { "plain" }))
+        .dynamic_page("/docs/", axum::routing::get(|| async { "docs" }))
+        .dynamic_page("/things/{slug}", axum::routing::get(thing))
+        .unlisted()
+        .dynamic_page(
+            "/files/{*path}",
+            axum::routing::get(|UrlPath(path): UrlPath<String>| async move { path }),
+        )
+        .unlisted()
+        .dynamic_page(
+            "/private",
+            axum::routing::get(|| async { "secret" }).layer(axum::middleware::from_fn(
+                |request: Request<Body>, next: axum::middleware::Next| async move {
+                    if request.headers().contains_key(header::AUTHORIZATION) {
+                        next.run(request).await
+                    } else {
+                        axum::response::IntoResponse::into_response(StatusCode::UNAUTHORIZED)
+                    }
+                },
+            )),
+        )
+}
+
+fn location(response: &Response) -> &str {
+    response
+        .headers()
+        .get(header::LOCATION)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default()
+}
+
+#[tokio::test]
+async fn every_page_redirects_its_other_trailing_slash_form_to_the_declared_one() {
+    let root: PathBuf = built_site("slash-redirects");
+    let router: Router =
+        site_router_with(&root, frontend_with(slash_pages())).expect("the built site boots");
+
+    // (requested, canonical): static, dynamic, parameterised, declared-with-slash.
+    for (requested, expected) in [
+        ("/about/", "/about"),
+        ("/plain/?q=x&y=1", "/plain?q=x&y=1"),
+        ("/things/some-slug/", "/things/some-slug"),
+        ("/docs?q=x", "/docs/?q=x"),
+    ] {
+        let response: Response = get(&router, requested).await;
+        assert_eq!(
+            StatusCode::PERMANENT_REDIRECT,
+            response.status(),
+            "{requested}"
+        );
+        assert_eq!(expected, location(&response), "{requested}");
+    }
+
+    assert_eq!(StatusCode::OK, get(&router, "/about").await.status());
+    assert_eq!(StatusCode::OK, get(&router, "/docs/").await.status());
+}
+
+#[tokio::test]
+async fn a_redirect_keeps_the_method_so_a_post_is_not_turned_into_a_get() {
+    let root: PathBuf = built_site("slash-method");
+    let router: Router =
+        site_router_with(&root, frontend_with(slash_pages())).expect("the built site boots");
+
+    let response: Response = request(&router, Method::POST, "/plain/").await;
+    assert_eq!(StatusCode::PERMANENT_REDIRECT, response.status());
+    assert_eq!("/plain", location(&response));
+}
+
+#[tokio::test]
+async fn a_misslashed_url_to_a_missing_resource_redirects_first_then_404s_at_the_canonical_path() {
+    let root: PathBuf = built_site("slash-not-found");
+    let router: Router =
+        site_router_with(&root, frontend_with(slash_pages())).expect("the built site boots");
+
+    let redirect: Response = get(&router, "/things/nope/").await;
+    assert_eq!(StatusCode::PERMANENT_REDIRECT, redirect.status());
+    assert_eq!("/things/nope", location(&redirect));
+
+    let response: Response = get(&router, "/things/nope").await;
+    assert_eq!(StatusCode::NOT_FOUND, response.status());
+    let body: String = text(response).await;
+    assert!(body.contains("fixture 404 hint no thing nope"), "{body}");
+}
+
+#[tokio::test]
+async fn a_guarded_page_redirects_without_its_guard_and_the_guard_still_answers_at_the_canonical_path()
+ {
+    let root: PathBuf = built_site("slash-guarded");
+    let router: Router =
+        site_router_with(&root, frontend_with(slash_pages())).expect("the built site boots");
+
+    // The redirect says only that the route exists, which the 401 says anyway.
+    let redirect: Response = get(&router, "/private/").await;
+    assert_eq!(StatusCode::PERMANENT_REDIRECT, redirect.status());
+    assert_eq!("/private", location(&redirect));
+
+    assert_eq!(
+        StatusCode::UNAUTHORIZED,
+        get(&router, "/private").await.status()
+    );
+}
+
+#[tokio::test]
+async fn the_root_a_wildcard_and_an_undeclared_path_get_no_alias() {
+    let root: PathBuf = built_site("slash-exempt");
+    let router: Router =
+        site_router_with(&root, frontend_with(slash_pages())).expect("the built site boots");
+
+    assert_eq!(StatusCode::OK, get(&router, "/").await.status());
+
+    // A wildcard already matches the slash form; it is served, not redirected.
+    let wildcard: Response = get(&router, "/files/a/b/").await;
+    assert_eq!(StatusCode::OK, wildcard.status());
+    assert_eq!("a/b/", text(wildcard).await);
+
+    let response: Response = get(&router, "/nope/").await;
+    assert_eq!(StatusCode::NOT_FOUND, response.status());
+    let body: String = text(response).await;
+    assert!(body.contains("fixture 404"), "{body}");
+}
+
+#[tokio::test]
+async fn two_pages_differing_only_by_a_trailing_slash_are_refused_at_boot() {
+    let root: PathBuf = built_site("slash-duplicate");
+    let pages: Pages = Pages::new()
+        .dynamic_page("/blog", axum::routing::get(|| async { "a" }))
+        .dynamic_page("/blog/", axum::routing::get(|| async { "b" }));
+
+    let error: WebServerError =
+        site_router_with(&root, frontend_with(pages)).expect_err("both forms cannot be routed");
+    assert!(
+        matches!(
+            error,
+            WebServerError::DuplicatePagePath { ref first, ref second }
+                if first == "/blog" && second == "/blog/"
+        ),
+        "{error}"
+    );
 }
