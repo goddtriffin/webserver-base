@@ -2,6 +2,7 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 
 use chrono::{DateTime, Utc};
 use handlebars::{Handlebars, HelperDef, handlebars_helper};
@@ -10,6 +11,8 @@ use serde_json::Value;
 use tracing::instrument;
 
 use super::error::TemplateError;
+use super::page::PageTemplateData;
+use super::robots;
 
 /// The subdirectories scanned, in order. A template's name is its file stem, so
 /// `pages/home.hbs` is `{{> home}}`; stems must be unique across all three.
@@ -24,10 +27,25 @@ pub const BASE_TEMPLATE_NAME: &str = "base";
 
 /// The 404 template every frontend must provide.
 ///
-/// Its data is not a per-project decision — every site wants the same page name,
-/// the same `/404` URL and the same `noindex, follow` — so the library declares
-/// it. What it *looks* like is still entirely the project's.
+/// Its declaration is not a per-project decision — every site wants the same
+/// page name, the same `/404` URL and the same `noindex, follow` — so the
+/// library makes it. What it *looks* like, and what data it shows, are the
+/// project's.
 pub const NOT_FOUND_TEMPLATE_NAME: &str = "404";
+
+/// The 404's page declaration, shared by the router fallback and
+/// `WebServerState::not_found` so the two cannot drift.
+static NOT_FOUND_PAGE: LazyLock<PageTemplateData> = LazyLock::new(|| {
+    PageTemplateData::new(NOT_FOUND_TEMPLATE_NAME, "404", "/404")
+        .with_robots(robots::NOINDEX_FOLLOW)
+});
+
+/// The 404's page declaration. Not a per-project decision; see
+/// [`NOT_FOUND_TEMPLATE_NAME`].
+#[must_use]
+pub fn not_found_page() -> &'static PageTemplateData {
+    &NOT_FOUND_PAGE
+}
 
 /// The layout itself, compiled into the crate.
 ///
@@ -37,11 +55,51 @@ pub const NOT_FOUND_TEMPLATE_NAME: &str = "404";
 /// wrong version of it.
 const BASE_TEMPLATE: &str = include_str!("../../assets/html/layouts/base.hbs");
 
+/// Every helper name a project may not register: Handlebars' own built-ins,
+/// then this library's. Kept by hand because Handlebars offers no lookup.
+const RESERVED_HELPERS: [&str; 21] = [
+    "if",
+    "unless",
+    "each",
+    "with",
+    "lookup",
+    "raw",
+    "log",
+    "eq",
+    "ne",
+    "gt",
+    "gte",
+    "lt",
+    "lte",
+    "and",
+    "or",
+    "not",
+    "len",
+    "join",
+    "pretty_date",
+    "has_key",
+    "is_active",
+];
+
 // Comma-joins a list of strings, for `<meta name="keywords">`.
 handlebars_helper!(join: |list: Vec<String>| list.join(","));
 
 // Renders a UTC date as "January 15, 1990".
 handlebars_helper!(pretty_date: |date: DateTime<Utc>| date.format("%B %e, %Y").to_string());
+
+// True when a nav link's `href` should be highlighted on the page at
+// `page_url`: `/` only on the home page, any other href on itself and on every
+// page beneath it. Segment-aware, so `/stats` is not active on `/statsheet`.
+handlebars_helper!(is_active: |href: str, page_url: str| {
+    let href: &str = href.trim_end_matches('/');
+    if href.is_empty() {
+        page_url == "/"
+    } else {
+        page_url
+            .strip_prefix(href)
+            .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
+    }
+});
 
 // True when an object has the given key.
 handlebars_helper!(has_key: |object: Value, key: str| {
@@ -70,6 +128,7 @@ impl<'a> TemplateRegistry<'a> {
         handlebars.register_helper("join", Box::new(join));
         handlebars.register_helper("pretty_date", Box::new(pretty_date));
         handlebars.register_helper("has_key", Box::new(has_key));
+        handlebars.register_helper("is_active", Box::new(is_active));
 
         // A missing field becomes an error rather than an empty string: a blank
         // `<title>` is a bug that ships, a failed render is one that gets fixed.
@@ -170,6 +229,28 @@ impl<'a> TemplateRegistry<'a> {
         }
 
         Ok(registry)
+    }
+
+    /// Registers a project's own helper, refusing any name already taken.
+    ///
+    /// # Errors
+    ///
+    /// [`TemplateError::ReservedHelper`] if the name belongs to a library or
+    /// Handlebars built-in helper. Letting a project's win would silently
+    /// change what every template using the built-in renders, the embedded
+    /// layout included.
+    pub fn register_project_helper(
+        &mut self,
+        name: &str,
+        helper: Box<dyn HelperDef + Send + Sync + 'a>,
+    ) -> Result<(), TemplateError> {
+        if RESERVED_HELPERS.contains(&name) {
+            return Err(TemplateError::ReservedHelper {
+                name: name.to_string(),
+            });
+        }
+        self.handlebars.register_helper(name, helper);
+        Ok(())
     }
 
     /// Registers an extra helper, for a project that needs one.
@@ -292,6 +373,50 @@ mod tests {
             .render("check", &json!({ "map": { "b": 1 } }))
             .expect("renders");
         assert_eq!(expected_absent, actual_absent);
+    }
+
+    #[test]
+    fn is_active_matches_home_exactly_and_every_other_link_by_path_segment() {
+        let mut registry: TemplateRegistry<'_> = TemplateRegistry::empty();
+        registry
+            .handlebars
+            .register_template_string("nav", "{{#if (is_active href page)}}on{{else}}off{{/if}}")
+            .expect("valid template");
+        let active = |href: &str, page: &str| -> String {
+            registry
+                .render("nav", &json!({ "href": href, "page": page }))
+                .expect("renders")
+        };
+
+        // Home would otherwise be active everywhere, since every path starts
+        // with `/`.
+        assert_eq!("on", active("/", "/"));
+        assert_eq!("off", active("/", "/stats"));
+
+        assert_eq!("on", active("/stats", "/stats"));
+        assert_eq!("on", active("/stats", "/stats/chapter-one"));
+        assert_eq!("on", active("/stats/", "/stats/chapter-one"));
+        assert_eq!("off", active("/stats", "/statsheet"));
+        assert_eq!("off", active("/stats", "/"));
+    }
+
+    #[test]
+    fn a_project_helper_may_not_take_a_built_in_name() {
+        let mut registry: TemplateRegistry<'_> = TemplateRegistry::empty();
+
+        for name in ["eq", "each", "is_active"] {
+            let error: TemplateError = registry
+                .register_project_helper(name, Box::new(super::join))
+                .expect_err("a built-in name is reserved");
+            assert!(
+                matches!(error, TemplateError::ReservedHelper { name: ref taken } if taken == name),
+                "{error}"
+            );
+        }
+
+        registry
+            .register_project_helper("money", Box::new(super::join))
+            .expect("an unused name is free");
     }
 
     #[test]

@@ -50,3 +50,30 @@ pub mod webserver;
 pub use webserver::{
     AppShutdown, Shutdown, WebServer, WebServerError, WebServerState, bootstrap_with_release,
 };
+
+// Every crate whose types appear in this library's API, re-exported so a
+// project integrates through the version this library was built against rather
+// than a second copy that does not unify with it. `serde`'s derive is the
+// exception in practice: its generated code names `::serde`, so a project
+// deriving `Serialize` still depends on it directly.
+pub use serde;
+pub use serde_json;
+pub use tracing;
+
+#[cfg(any(feature = "webserver", feature = "analytics"))]
+pub use axum;
+#[cfg(any(
+    feature = "templates",
+    feature = "sitemap",
+    feature = "feed",
+    feature = "webserver"
+))]
+pub use chrono;
+#[cfg(feature = "templates")]
+pub use handlebars;
+#[cfg(any(feature = "analytics", feature = "telegram"))]
+pub use reqwest;
+#[cfg(feature = "observability")]
+pub use sentry;
+#[cfg(any(feature = "webserver", feature = "telegram"))]
+pub use tokio;

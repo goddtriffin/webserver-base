@@ -33,6 +33,8 @@ where
     pub country_code: &'a str,
     pub see_also: &'a [String],
     pub copyright_start: &'a str,
+    /// The project's own site-wide data, as `{{site.…}}`.
+    pub site: &'a Value,
 
     // ── merged: page wins over base ───────────────────────────────────────
     pub description: &'a str,
@@ -134,6 +136,7 @@ where
             country_code: base.country_code(),
             see_also: base.see_also(),
             copyright_start: base.copyright_start(),
+            site: base.site(),
 
             description: page.description().unwrap_or_else(|| base.description()),
             social_image,

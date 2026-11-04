@@ -1,4 +1,5 @@
 {{#*inline "body"}}
-<main>fixture 404</main>
+{{> header}}
+<main>fixture 404{{#if app}} hint {{app.hint}}{{/if}}</main>
 {{/inline}}
 {{> base}}

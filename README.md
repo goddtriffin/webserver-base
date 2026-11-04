@@ -26,6 +26,13 @@ webserver-base = { version = "0.2", features = ["pages", "observability", "prese
 
 Nothing is enabled by default.
 
+Every crate whose types appear in this library's API is re-exported from its
+root — `webserver_base::{axum, chrono, handlebars, serde_json, tokio, tracing,
+reqwest, sentry}`, each behind the feature that uses it — so a project builds
+against the same version the library does, and never adds one just to call it.
+Keep a direct `serde` dependency anyway: `#[derive(Serialize)]` generates code
+naming `::serde`.
+
 | feature | what it gives you |
 |---|---|
 | `templates` | the Handlebars registry, the embedded base layout, the template-data types |
@@ -76,7 +83,7 @@ fn main() -> Result<(), WebServerError> {
 ```
 
 That is the whole file. There is no `Environment::from_env`, no `Observability`
-wiring, and no 404 declaration, because those are identical in every project —
+wiring, and no 404 routing, because those are identical in every project —
 [`bootstrap`](#bootstrap) and [`frontend`](#frontend--the-line-between-a-site-and-a-service)
 own them.
 
@@ -189,11 +196,12 @@ let response: Response = router.oneshot(Request::get("/").body(Body::empty())?).
 ## `frontend` — the line between a site and a service
 
 `WebServer::frontend` says "this server returns HTML to humans." Everything a
-website needs then follows automatically, and every required input is a field on
-`FrontendParams`, so forgetting one is a compile error rather than a page that
-silently ships without a share card.
+website needs then follows automatically, and every required input is an
+argument to `FrontendParams::new(base, pages, analytics, sentry_browser_dsn)`, so
+forgetting one is a compile error rather than a page that silently ships without
+a share card.
 
-| field | why it is required |
+| argument | why it is required |
 |---|---|
 | `base` | site identity: name, description, origin, social image, theme, copyright |
 | `pages` | the routes, which are also the sitemap |
@@ -206,12 +214,44 @@ url sets, first-party analytics, the Sentry browser tunnel, and the pre-paint
 theme script.
 
 `FrontendParams::from_env(base, pages)` reads the analytics id and browser DSN
-for you.
+for you. Two optional builders follow either constructor:
 
-**The 404 is not a per-project decision.** Every frontend gets
-`PageTemplateData::new("404", "404", "/404").with_robots(NOINDEX_FOLLOW)`
-automatically — the data is identical everywhere, so the library declares it.
-What the page *looks* like is entirely yours, in `html/pages/404.hbs`.
+| builder | default | for |
+|---|---|---|
+| `with_not_found(NotFound::with(…))` | `NotFound::none()` | the fallback 404's `{{app}}` |
+| `with_helper(name, helper)` | none | a Handlebars helper of the project's own |
+
+### The 404
+
+**How a 404 behaves is not a per-project decision; how it looks, and what it
+shows, is.** The library guarantees every frontend a 404 that renders
+`html/pages/404.hbs` at the requested URL with a real `404` status, `noindex,
+follow`, and never a redirect — the soft 404 that Search Console penalises.
+
+Its data works like any other page's: `{{site}}` is always there, and `{{app}}`
+is yours to supply, two ways.
+
+```rust
+// Unmatched URLs: computed per request, from the URI. Keep it cheap — bots
+// probe for 404s. Unserializable data is reported and rendered as `null`.
+FrontendParams::from_env(base, pages)?
+    .with_not_found(NotFound::with(|state: WebServerState<App>, uri: Uri| async move {
+        DidYouMean { closest: state.app().posts.closest(uri.path()) }
+    }))
+
+// A matched route whose resource is missing: the same page, your own data.
+async fn post(State(state): Ctx, Path(slug): Path<String>) -> Response {
+    let Some(post) = state.app().posts.get(&slug) else {
+        return state.not_found(MissingPost { slug });
+    };
+    // …
+}
+```
+
+`state.not_found` never runs the fallback hook. A failed render is a 500, and on
+a server with no frontend it is a bare `404`. Every 404 is served never-cached,
+so one seen mid-deploy cannot outlive it. A miss under `/static` is always a
+bare, never-cached `404`: nothing displays an `<img>`'s error body.
 
 ### What a frontend must ship
 
@@ -292,6 +332,12 @@ Three types, split by lifetime.
 in server state. `BaseTemplateDataParams` names every field so two cannot be
 transposed. `with_*`, `replace_*` and `extend_*` methods override afterwards.
 
+`with_site(data)` adds the project's own site-wide data — a nav tree, a phone
+number, opening hours — as `{{site.…}}` on **every** page, the 404 included.
+Declare it once here rather than re-passing it in each page's `{{app}}`, and a
+shared partial can read it on any page. It is serialized at boot; data that
+cannot be is a boot panic, never a per-request one.
+
 A leading slash on `social_image` is stripped on the way in, so it keys into the
 cache-buster map exactly like the stylesheet and script paths beside it.
 
@@ -318,7 +364,22 @@ render error, not an empty string. A blank `<title>` is a bug that ships; a
 failed render is one that gets fixed.
 
 Helpers available in any template: `join` (comma-joins a list), `pretty_date`
-(`January 15, 1990`), `has_key` (whether a map holds a key).
+(`January 15, 1990`), `has_key` (whether a map holds a key), and `is_active`
+(whether a nav link is the current page's section):
+
+```handlebars
+{{#each site.nav}}
+  <a href="{{href}}"{{#if (is_active href ../page_url)}} aria-current="page"{{/if}}>{{label}}</a>
+{{/each}}
+```
+
+`/` is active only on `/`; any other href on itself and every page beneath it,
+by path segment — `/stats` is active on `/stats/one`, not on `/statsheet`.
+
+A project adds its own with `FrontendParams::with_helper`, defined through the
+re-exported `webserver_base::handlebars::handlebars_helper!`. A name Handlebars
+or the library already uses is a boot error, never a silent override. A helper
+that several projects reimplement belongs in the library.
 
 ### `ThemeColor`
 
@@ -384,7 +445,8 @@ Pages::new()
     .unlisted()                                   // route it, keep it out of the sitemap
 ```
 
-There is no `not_found` — the library declares it.
+There is no 404 page to declare — the library routes it; see
+[The 404](#the-404).
 
 `extend_images`, `with_last_modified` and `unlisted` apply to the page declared
 immediately before them.
@@ -531,7 +593,9 @@ They exit before the runtime or error monitoring start. They do still read
 **Everything under `static/` is hashed**, including the icons, because `/static/*`
 is served immutable-for-a-year and every byte in it must therefore be
 content-addressed. Well-known root routes (`/favicon.ico`, `/robots.txt`, …)
-serve the same bytes never-cached, where the URL cannot change.
+serve the same bytes never-cached, where the URL cannot change. A miss under
+`/static` is a plain 404 and is never cached: a hashed URL requested a moment
+before its file is deployed must not stay a 404 for a year.
 
 `cache-buster.json` and `static/script/generated/cache-buster.ts` are **build
 outputs — gitignore both.** Add this to every consuming project:
@@ -864,7 +928,7 @@ proxy paths, `<meta charset="utf-8">`, the viewport string, and the entire
 | skill | use it when |
 |---|---|
 | [`contribution-guide`](.claude/skills/contribution-guide/SKILL.md) | writing, reviewing, refactoring, testing or documenting **any** code here — invoke it at the start of every change, however small |
-| [`rollout`](.claude/skills/rollout/SKILL.md) | shipping a finished change: version bump, E2E smoke test, Docker push, commit to main, tag, GitHub release, crates.io and JSR publishes |
+| [`rollout`](.claude/skills/rollout/SKILL.md) | shipping a finished change: patch bump, E2E smoke test, Docker push, pull request, tag, GitHub release, crates.io and JSR publishes |
 
 Rules live in the skills, not here. Invoke `contribution-guide` before any
 change to this repo.

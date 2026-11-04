@@ -9,54 +9,98 @@ use crate::analytics::{AnalyticsConfig, SentryDsn};
 use crate::assets::CacheBuster;
 use crate::feed::{ATOM_PATH, Feed, FeedSet, FeedSite, JSON_PATH, RSS_PATH, build_feeds};
 use crate::sitemap::{SitemapSet, SitemapUrl, build_sitemaps};
-use std::sync::Arc;
-
-use serde_json::Value;
+use handlebars::HelperDef;
 
 use crate::templates::{
-    AnalyticsPaths, BaseTemplateData, FeedLinks, FrontendRuntime, NOT_FOUND_TEMPLATE_NAME,
-    PageTemplateData, SentryBrowser, SocialImageMetadata, robots,
+    AnalyticsPaths, BaseTemplateData, FeedLinks, FrontendRuntime, SentryBrowser,
+    SocialImageMetadata,
 };
 use crate::{Environment, env};
 use chrono::Datelike as _;
 
 use super::error::WebServerError;
+use super::not_found::NotFound;
 use super::pages::Pages;
 
-/// Everything a frontend requires.
+/// Everything a frontend requires, plus what it may add.
 ///
-/// A named-field struct rather than five positional arguments: two of them are
-/// strings, and this one cannot be built with them transposed.
+/// The four required inputs are constructor arguments, so omitting one is a
+/// compile error; each has its own type, so none can be passed in another's
+/// place. The optional ones are `with_*` builders with a working default.
 pub struct FrontendParams<S = ()> {
     /// What is true of every page on the site.
-    pub base: BaseTemplateData,
+    pub(super) base: BaseTemplateData,
     /// The pages themselves, which become both routes and sitemap entries.
-    pub pages: Pages<S>,
+    pub(super) pages: Pages<S>,
     /// Which Plausible site this frontend reports to.
-    pub analytics: AnalyticsConfig,
+    pub(super) analytics: AnalyticsConfig,
     /// The browser Sentry DSN — separate from the server's, because Sentry
     /// recommends a project per language and per deployable, and mixing Rust
     /// panics with JavaScript exceptions in one stream helps nobody.
-    pub sentry_browser_dsn: String,
+    pub(super) sentry_browser_dsn: String,
+    /// The router-fallback 404's `{{app}}`.
+    pub(super) not_found: NotFound<S>,
+    /// The project's own Handlebars helpers.
+    pub(super) helpers: Vec<(String, Box<dyn HelperDef + Send + Sync + 'static>)>,
 }
 
 impl<S> FrontendParams<S>
 where
     S: Clone + Send + Sync + 'static,
 {
+    /// A frontend from its four required inputs.
+    #[must_use]
+    pub fn new(
+        base: BaseTemplateData,
+        pages: Pages<S>,
+        analytics: AnalyticsConfig,
+        sentry_browser_dsn: impl Into<String>,
+    ) -> Self {
+        Self {
+            base,
+            pages,
+            analytics,
+            sentry_browser_dsn: sentry_browser_dsn.into(),
+            not_found: NotFound::none(),
+            helpers: Vec::new(),
+        }
+    }
+
     /// Reads the analytics script id and browser DSN from the environment.
     ///
     /// # Errors
     ///
     /// [`WebServerError::Env`] if either variable is unset or blank.
     pub fn from_env(base: BaseTemplateData, pages: Pages<S>) -> Result<Self, WebServerError> {
-        Ok(Self {
+        Ok(Self::new(
             base,
             pages,
-            analytics: AnalyticsConfig::from_env().map_err(WebServerError::Env)?,
-            sentry_browser_dsn: env::required(crate::analytics::ENV_SENTRY_BROWSER_DSN)
-                .map_err(WebServerError::Env)?,
-        })
+            AnalyticsConfig::from_env().map_err(WebServerError::Env)?,
+            env::required(crate::analytics::ENV_SENTRY_BROWSER_DSN).map_err(WebServerError::Env)?,
+        ))
+    }
+
+    /// What the router-fallback 404 shows as `{{app}}`. Defaults to
+    /// [`NotFound::none`].
+    #[must_use]
+    pub fn with_not_found(mut self, not_found: NotFound<S>) -> Self {
+        self.not_found = not_found;
+        self
+    }
+
+    /// Registers a Handlebars helper of the project's own, under `name`.
+    ///
+    /// A name the library or Handlebars already uses is a boot error, never a
+    /// silent override. A helper several projects reimplement belongs in the
+    /// library instead.
+    #[must_use]
+    pub fn with_helper(
+        mut self,
+        name: impl Into<String>,
+        helper: impl HelperDef + Send + Sync + 'static,
+    ) -> Self {
+        self.helpers.push((name.into(), Box::new(helper)));
+        self
     }
 }
 
@@ -87,8 +131,8 @@ pub struct Frontend<S> {
     pub well_known: WellKnown,
     pub analytics: AnalyticsConfig,
     pub sentry_dsn: SentryDsn,
-    /// The 404, declared by the library rather than by each project.
-    pub not_found: (Arc<PageTemplateData>, Arc<Value>),
+    /// The router-fallback 404's `{{app}}`.
+    pub not_found: NotFound<S>,
     /// Whether an SVG icon exists to link.
     pub has_svg_icon: bool,
 }
@@ -213,14 +257,6 @@ where
             feed: feed_links,
         };
 
-        let not_found: (Arc<PageTemplateData>, Arc<Value>) = (
-            Arc::new(
-                PageTemplateData::new(NOT_FOUND_TEMPLATE_NAME, "404", "/404")
-                    .with_robots(robots::NOINDEX_FOLLOW),
-            ),
-            Arc::new(Value::Null),
-        );
-
         Ok(Self {
             pages: params.pages,
             base: params.base,
@@ -228,7 +264,7 @@ where
             well_known,
             analytics: params.analytics,
             sentry_dsn,
-            not_found,
+            not_found: params.not_found,
             has_svg_icon: icon_source.is_vector(),
         })
     }
