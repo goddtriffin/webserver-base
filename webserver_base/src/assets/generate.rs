@@ -202,7 +202,7 @@ fn is_content_hashed(path: &Path) -> bool {
 }
 
 /// `dir/name.ext` → `dir/name.<md5>.ext`, hash inserted before the *first*
-/// extension so `main.js.map` stays a `.js.map`.
+/// extension so a double extension like `archive.tar.gz` stays a `.tar.gz`.
 fn content_hashed_path(file_path: &Path, root: &Path) -> Result<PathBuf, CacheBusterError> {
     let mut file: File = File::open(file_path).map_err(|source| CacheBusterError::ReadFile {
         path: file_path.to_path_buf(),
@@ -266,13 +266,13 @@ mod tests {
     }
 
     #[test]
-    fn a_source_map_keeps_its_double_extension() {
+    fn a_double_extension_keeps_its_full_extension() {
         let hashed: PathBuf =
             super::content_hashed_path(Path::new("Cargo.toml"), Path::new(".")).expect("readable");
         let name: &str = hashed.file_name().and_then(|n| n.to_str()).expect("named");
 
-        // The hash goes before the FIRST dot, so `main.js.map` stays a `.js.map`
-        // rather than becoming `main.js.<hash>.map`.
+        // The hash goes before the FIRST dot, so `archive.tar.gz` stays a
+        // `.tar.gz` rather than becoming `archive.tar.<hash>.gz`.
         assert!(name.starts_with("Cargo."));
         assert!(
             std::path::Path::new(name)
