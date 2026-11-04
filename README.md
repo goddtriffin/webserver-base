@@ -883,15 +883,20 @@ The `env` module offers `required`, `optional` and `parse_or` for your own.
 Published to JSR as [`@todd/webserver-base`](https://jsr.io/@todd/webserver-base).
 
 ```jsonc
-{ "imports": { "@todd/webserver-base": "jsr:@todd/webserver-base@^0.1.1" } }
+{ "imports": { "@todd/webserver-base": "jsr:@todd/webserver-base@^0.1.2" } }
 ```
 
 ## `@todd/webserver-base/bundle`
 
 The esbuild wrapper every project's `gen_js` target runs. It discovers every
 top-level `static/script/*.ts` as an entry point (subdirectories are pulled in
-transitively, not bundled separately) and emits minified ES modules with source
-maps into `bin/static/script/`.
+transitively, not bundled separately) and emits minified ES modules into
+`bin/static/script/`.
+
+**No source maps, ever.** A map embeds the project's original TypeScript, and
+everything under `static/` is published at a content-hashed URL, so a map built
+anywhere ships to production. Not configurable: the build that would want one
+locally is the same `gen_js` the Docker image runs.
 
 ```sh
 deno run --allow-read --allow-write --allow-env --allow-net --allow-run \

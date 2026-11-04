@@ -29,7 +29,8 @@ collectEntryPoints().then((entryPoints: string[]) => {
     format: "esm",
     target: "esnext",
     minify: true,
-    sourcemap: true,
+    // A map embeds the original TypeScript, and anything under static/ is published.
+    sourcemap: false,
     treeShaking: true,
   }).then(() => {
     Deno.exit(0);
