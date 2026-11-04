@@ -272,6 +272,10 @@ where
     /// The one assembly path, so the router [`into_router`](WebServer::into_router)
     /// hands a test cannot drift from the one production serves.
     #[instrument(skip_all)]
+    #[cfg_attr(
+        not(feature = "pages"),
+        expect(unused_mut, reason = "only a frontend merges routes into the router")
+    )]
     fn assemble(self, shutdown: Shutdown) -> Result<Assembled<S>, WebServerError> {
         let Self {
             host,
@@ -309,10 +313,7 @@ where
         #[cfg(feature = "pages")]
         let mut templates: Option<crate::templates::TemplateRegistry<'static>> = None;
         #[cfg(feature = "pages")]
-        let mut not_found: Option<(
-            std::sync::Arc<crate::templates::PageTemplateData>,
-            std::sync::Arc<serde_json::Value>,
-        )> = None;
+        let mut not_found: Option<super::not_found::NotFound<S>> = None;
         #[cfg(feature = "pages")]
         let mut proxy_scripts: Option<Router<WebServerState<S>>> = None;
         #[cfg(feature = "pages")]
@@ -427,24 +428,22 @@ struct Assembled<S> {
 #[cfg(feature = "pages")]
 fn attach_not_found<S>(
     router: Router<WebServerState<S>>,
-    not_found: Option<(
-        std::sync::Arc<crate::templates::PageTemplateData>,
-        std::sync::Arc<serde_json::Value>,
-    )>,
+    not_found: Option<super::not_found::NotFound<S>>,
 ) -> Router<WebServerState<S>>
 where
     S: Clone + Send + Sync + 'static,
 {
     match not_found {
-        Some((page, data)) => router.fallback(move |axum::extract::State(state)| {
-            let page: std::sync::Arc<crate::templates::PageTemplateData> =
-                std::sync::Arc::clone(&page);
-            let data: std::sync::Arc<serde_json::Value> = std::sync::Arc::clone(&data);
-            async move {
-                let body: Response = super::pages::render_or_500(&state, &page, &data);
-                (StatusCode::NOT_FOUND, body).into_response()
-            }
-        }),
+        Some(not_found) => router.fallback(
+            move |axum::extract::State(state): axum::extract::State<WebServerState<S>>,
+                  uri: axum::http::Uri| {
+                let not_found: super::not_found::NotFound<S> = not_found.clone();
+                async move {
+                    let data: serde_json::Value = not_found.data(state.clone(), uri).await;
+                    state.not_found(data)
+                }
+            },
+        ),
         None => router.fallback(plain_not_found),
     }
 }
@@ -567,7 +566,14 @@ async fn health() -> StatusCode {
 
 /// The fallback for a server with no 404 page of its own.
 async fn plain_not_found() -> Response {
-    (StatusCode::NOT_FOUND, "404").into_response()
+    plain_not_found_response()
+}
+
+/// A bare 404, for a server that has no page to render one with.
+pub(super) fn plain_not_found_response() -> Response {
+    let mut response: Response = (StatusCode::NOT_FOUND, "404").into_response();
+    crate::assets::mark_never_cached(response.headers_mut());
+    response
 }
 
 /// Serves the generated and embedded documents from memory.
@@ -843,16 +849,13 @@ struct AssembledFrontend<S> {
     runtime: crate::templates::FrontendRuntime,
     base: crate::templates::BaseTemplateData,
     templates: crate::templates::TemplateRegistry<'static>,
-    not_found: (
-        std::sync::Arc<crate::templates::PageTemplateData>,
-        std::sync::Arc<serde_json::Value>,
-    ),
+    not_found: super::not_found::NotFound<S>,
 }
 
 /// Builds the frontend and sorts its routes by the cache policy each needs.
 #[cfg(feature = "pages")]
 fn assemble_frontend<S>(
-    params: super::frontend::FrontendParams<S>,
+    mut params: super::frontend::FrontendParams<S>,
     feed: Option<crate::feed::Feed>,
     cache_buster: &crate::assets::CacheBuster,
     environment: Environment,
@@ -860,10 +863,13 @@ fn assemble_frontend<S>(
 where
     S: Clone + Send + Sync + 'static,
 {
-    let templates: crate::templates::TemplateRegistry<'static> =
+    let mut templates: crate::templates::TemplateRegistry<'static> =
         crate::templates::TemplateRegistry::from_dir(
             cache_buster.root().join(crate::templates::TEMPLATE_ROOT),
         )?;
+    for (name, helper) in std::mem::take(&mut params.helpers) {
+        templates.register_project_helper(&name, helper)?;
+    }
 
     let built: super::frontend::Frontend<S> =
         super::frontend::Frontend::build(params, feed, cache_buster, environment)?;
@@ -883,7 +889,6 @@ where
     // analytics script on every page view.
     let (proxy_scripts, api) = proxy_routes(&built);
 
-    let not_found = built.not_found.clone();
     routes = routes.merge(built.pages.into_router());
 
     Ok(AssembledFrontend {
@@ -894,7 +899,7 @@ where
         runtime: built.runtime,
         base: built.base,
         templates,
-        not_found,
+        not_found: built.not_found,
     })
 }
 

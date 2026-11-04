@@ -23,6 +23,14 @@ pub enum TemplateError {
     )]
     ReservedName { name: &'static str, path: PathBuf },
 
+    /// A project registered a helper whose name is already taken.
+    #[error(
+        "the helper `{name}` is already defined by webserver-base or Handlebars. \
+         Rename the project's helper; if several projects need the same one, \
+         it belongs in the library."
+    )]
+    ReservedHelper { name: String },
+
     /// A frontend was declared with no page templates to serve.
     #[error(
         "`{path}` contains no `.hbs` pages. A frontend must serve at least one \
@@ -32,9 +40,9 @@ pub enum TemplateError {
 
     /// A frontend has no 404 template.
     #[error(
-        "`{path}` is missing. Every frontend serves a 404, and its data is the \
-         same everywhere, so the library declares it — but the page itself is \
-         yours to design."
+        "`{path}` is missing. Every frontend serves a 404 with a real 404 \
+         status, so the library declares and routes it — but the page itself \
+         is yours to design."
     )]
     MissingNotFoundPage { path: PathBuf },
 

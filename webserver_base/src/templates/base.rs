@@ -1,6 +1,7 @@
 //! Per-server template data: what is true of every page on the site.
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use super::site_entity::SiteEntity;
 use super::theme::{Fallback, ThemeColor, ThemeScript};
@@ -71,6 +72,8 @@ pub struct BaseTemplateData {
     copyright_start: String,
     style_sheets: Vec<String>,
     scripts: Vec<String>,
+    #[serde(default)]
+    site: Value,
 }
 
 impl BaseTemplateData {
@@ -101,7 +104,28 @@ impl BaseTemplateData {
             copyright_start: params.copyright_start,
             style_sheets: params.style_sheets,
             scripts: params.scripts,
+            site: Value::Null,
         }
+    }
+
+    /// The project's own site-wide data, reachable on every page — the 404
+    /// included — as `{{site.…}}`.
+    ///
+    /// For what every page shares but the library has no field for: a nav
+    /// tree, a phone number, opening hours. Supplying it once here is what
+    /// lets a partial read it on a page whose `{{app}}` knows nothing about it.
+    ///
+    /// # Panics
+    ///
+    /// If `site` cannot be serialized — at boot, never per request.
+    #[must_use]
+    pub fn with_site<A>(mut self, site: A) -> Self
+    where
+        A: Serialize,
+    {
+        self.site = serde_json::to_value(site)
+            .unwrap_or_else(|error| panic!("the site data is unserializable: {error}"));
+        self
     }
 
     /// Overrides the author.
@@ -187,6 +211,13 @@ impl BaseTemplateData {
     {
         self.scripts.extend(scripts.into_iter().map(Into::into));
         self
+    }
+
+    /// The project's site-wide data; `null` unless
+    /// [`with_site`](Self::with_site) was called.
+    #[must_use]
+    pub const fn site(&self) -> &Value {
+        &self.site
     }
 
     /// The site's name.

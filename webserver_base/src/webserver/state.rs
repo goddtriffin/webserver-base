@@ -10,10 +10,12 @@ use super::shutdown::Shutdown;
 use {
     super::error::WebServerError,
     crate::templates::{BaseTemplateData, PageTemplateData, TemplateData, TemplateRegistry},
-    axum::response::Html,
+    axum::http::StatusCode,
+    axum::response::{Html, IntoResponse, Response},
     serde::Serialize,
     std::collections::BTreeMap,
     std::sync::LazyLock,
+    tracing::error,
 };
 
 /// Stands in for the asset map when the `assets` kit is off.
@@ -200,6 +202,36 @@ impl<S> WebServerState<S> {
         )?;
 
         Ok(Html(registry.render(page.template(), &template_data)?))
+    }
+
+    /// The site's 404 page, with `data` as its `{{app}}` and a real 404 status.
+    ///
+    /// For a handler whose route matched but whose resource does not exist —
+    /// an unknown slug. It is the same page the router fallback serves, so the
+    /// two cannot drift. Without `.frontend(..)` it is a bare `404`; a failed
+    /// render is a 500, never a panic. Never cached, whichever it is.
+    #[cfg(feature = "templates")]
+    pub fn not_found<A>(&self, data: A) -> Response
+    where
+        A: Serialize,
+    {
+        if self.0.templates.is_none() {
+            return super::server::plain_not_found_response();
+        }
+
+        let page: &PageTemplateData = crate::templates::not_found_page();
+        let mut response: Response = match self.render(page, data) {
+            Ok(html) => (StatusCode::NOT_FOUND, html).into_response(),
+            Err(render_error) => {
+                error!("failed to render the 404 page: {render_error}");
+                render_error.into_response()
+            }
+        };
+        // Stamped here, not left to the never-cache layer: the router fallback
+        // sits outside it, and a cacheable 404 can outlive the deploy that
+        // makes its URL real.
+        crate::assets::mark_never_cached(response.headers_mut());
+        response
     }
 
     /// The asset map, empty when the `assets` kit is off.

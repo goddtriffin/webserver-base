@@ -23,7 +23,7 @@ pub use frontend::{
 pub use page::{Article, PageTemplateData};
 pub use registry::{
     BASE_TEMPLATE_NAME, NOT_FOUND_TEMPLATE_NAME, TEMPLATE_DIRECTORIES, TEMPLATE_ROOT,
-    TemplateRegistry,
+    TemplateRegistry, not_found_page,
 };
 pub use render::TemplateData;
 pub use site_entity::SiteEntity;

@@ -146,27 +146,22 @@ impl CacheBuster {
         next: Next,
     ) -> Result<Response, StatusCode> {
         let mut response: Response<Body> = next.run(request).await;
-        let headers: &mut HeaderMap = response.headers_mut();
-
-        remove_conditional_headers(headers);
-        headers.insert(
-            EXPIRES,
-            HeaderValue::from_static("Thu, 01 Jan 1970 00:00:00 GMT"),
-        );
-        headers.insert(
-            CACHE_CONTROL,
-            HeaderValue::from_static("no-cache, no-store, must-revalidate, private, max-age=0"),
-        );
-        headers.insert(PRAGMA, HeaderValue::from_static("no-cache"));
+        mark_never_cached(response.headers_mut());
 
         Ok(response)
     }
 
-    /// Marks a response as immutable for a year.
+    /// Marks a response as immutable for a year — if it found something.
     ///
     /// Only ever correct for content-hashed URLs, where a changed file is a
     /// changed URL by construction. That invariant is why every byte under
     /// `/static` is hashed, including the well-known icons.
+    ///
+    /// A miss is never-cached instead. A hashed URL can be requested before its
+    /// file exists — new HTML reaching a visitor mid-deploy — and a 404 stamped
+    /// immutable would be kept by the browser and the proxy for a year after
+    /// the file arrived. A 304 keeps the year: its headers overwrite the stored
+    /// response's, so `no-store` there would evict a good copy.
     ///
     /// # Errors
     ///
@@ -177,7 +172,13 @@ impl CacheBuster {
         next: Next,
     ) -> Result<Response, StatusCode> {
         let mut response: Response<Body> = next.run(request).await;
+        let status: StatusCode = response.status();
         let headers: &mut HeaderMap = response.headers_mut();
+
+        if !status.is_success() && status != StatusCode::NOT_MODIFIED {
+            mark_never_cached(headers);
+            return Ok(response);
+        }
 
         remove_conditional_headers(headers);
 
@@ -203,6 +204,22 @@ impl Display for CacheBuster {
         }
         Ok(())
     }
+}
+
+/// The never-cache headers, for a response that may be built outside the
+/// layer that would otherwise stamp them — the router fallback is attached
+/// after it.
+pub(crate) fn mark_never_cached(headers: &mut HeaderMap) {
+    remove_conditional_headers(headers);
+    headers.insert(
+        EXPIRES,
+        HeaderValue::from_static("Thu, 01 Jan 1970 00:00:00 GMT"),
+    );
+    headers.insert(
+        CACHE_CONTROL,
+        HeaderValue::from_static("no-cache, no-store, must-revalidate, private, max-age=0"),
+    );
+    headers.insert(PRAGMA, HeaderValue::from_static("no-cache"));
 }
 
 fn remove_conditional_headers(headers: &mut HeaderMap) {

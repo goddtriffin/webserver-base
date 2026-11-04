@@ -1,11 +1,11 @@
 ---
 name: rollout
-description: Use when shipping finished work in this repo — cutting a version, bumping Cargo.toml or deno.jsonc for a release, running the end-to-end smoke test, building or pushing the Docker image, committing to main, tagging, drafting a GitHub release, or publishing webserver-base to crates.io or @todd/webserver-base to JSR. Also use when asked whether a change is ready to ship, whether a version bump or publish is needed at all, when picking the next version number, or when any question arises about which rollout step comes next.
+description: Use when shipping finished work in this repo — cutting a version, bumping Cargo.toml or deno.jsonc for a release, running the end-to-end smoke test, building or pushing the Docker image, opening the pull request, tagging, drafting a GitHub release, or publishing webserver-base to crates.io or @todd/webserver-base to JSR. Also use when asked whether a change is ready to ship, whether a version bump or publish is needed at all, when picking the next version number, or when any question arises about which rollout step comes next.
 ---
 
 # Rollout
 
-Shipping this repo is a **fixed twelve-step sequence**. The steps never
+Shipping this repo is a **fixed thirteen-step sequence**. The steps never
 reorder and never merge. Which of them run is decided by what changed — see
 step 0 — but a step that is in scope is never skipped because a change "looks
 small."
@@ -27,15 +27,15 @@ Diff against `main` and classify:
 | `webserver_base/**` (the Rust lib) | Cargo bump, tag, release, crates.io publish — **and** the image steps, because the binary embeds the library |
 | `static/script/webserver-base/**` (the TS lib) | `deno.jsonc` PATCH bump, JSR publish |
 | `template_web_server/**`, `html/**`, `static/` (art, styles, non-lib scripts), `Dockerfile`, `Makefile` | the image steps: build, smoke test, push |
-| `README.md`, `CLAUDE.md`, `.claude/**`, other docs | nothing but the commit |
+| `README.md`, `AGENTS.md`, `CLAUDE.md`, `.claude/**`, other docs | nothing but the pull request |
 
 Then run only the steps those rows earn, **in the order below**, skipping the
 rest. The order never changes; only which steps are present.
 
 Two consequences worth stating outright:
 
-- **A docs-only change is `make lint test` and a commit.** No bump, no Docker,
-  no tag, no publish.
+- **A docs-only change is `make lint test` and a pull request.** No bump, no
+  Docker, no tag, no publish.
 - **A Rust-lib change always drags the image with it.** `template-web-server`
   compiles `webserver_base` in, so the built image is stale the moment the
   library moves. Never publish the crate without pushing the image.
@@ -51,7 +51,7 @@ minutes; the cost of a skipped one is a stale production image.
 
 The constraint that fixes everything else: **the production deploy watches
 commits to `main` and pulls `:latest`.** The image must already be in the
-registry when the commit lands. Push the image, *then* commit.
+registry when the PR is merged. Push the image, *then* hand over the PR.
 
 Reverse those two and the deploy fires against the new commit while the registry
 still holds the old image — production runs stale code, with no error anywhere.
@@ -64,15 +64,16 @@ still holds the old image — production runs stale code, with no error anywhere
 | 4 | E2E smoke test | `make docker_run`, then browse |
 | 5 | Tear down | `make docker_stop` |
 | 6 | **Push the image** | `make docker_push` |
-| 7 | **Commit to main** | `git commit` + `git push` |
-| 8 | Tag | `git tag vX.Y.Z` + `git push origin vX.Y.Z` |
-| 9 | GitHub release | `gh release create` |
-| 10 | Dry-run both libs | `make publish_dry_run` |
-| 11 | Publish Rust | `cargo publish --package webserver-base` |
-| 12 | Publish TypeScript | **the user runs** `deno publish` |
+| 7 | **Open the PR** | commit on a branch, `git push -u`, `gh pr create` |
+| 8 | **The user merges** | wait; never merge it yourself |
+| 9 | Tag | `git tag vX.Y.Z` + `git push origin vX.Y.Z` |
+| 10 | GitHub release | `gh release create` |
+| 11 | Dry-run both libs | `make publish_dry_run` |
+| 12 | Publish Rust | `cargo publish --package webserver-base` |
+| 13 | Publish TypeScript | **the user runs** `deno publish` |
 
-Work directly on `main`. No feature branch, no pull request — that is the
-default here, not a shortcut.
+Every change ships through a pull request the user reviews and merges by hand.
+Never commit or push to `main` directly.
 
 ---
 
@@ -80,7 +81,10 @@ default here, not a shortcut.
 
 The two libraries version independently:
 
-- The **Rust crate** follows semver in `[workspace.package] version`.
+- **The Rust crate is bumped by PATCH only**, in `[workspace.package] version`,
+  however breaking the change. The user is its only consumer and wants it that
+  way. Bump minor or major only when the user explicitly says to; silence means
+  patch. Breaking changes are covered by the release notes, not the number.
 - **`deno.jsonc` is bumped by PATCH only.** The TypeScript library is small and
   its consumers pin a caret range; a minor or major bump forces every project to
   edit its import map for no benefit.
@@ -130,7 +134,7 @@ bump: go back to step 3.
 
 `make docker_stop`.
 
-## 6. Push the image — before the commit
+## 6. Push the image — before the PR is merged
 
 `make docker_push` tags the single built image into **seven** production Docker
 Hub repos and pushes each: `scannable-codes-website`, `turnbased-website`,
@@ -141,22 +145,32 @@ Say so plainly when reporting it — seven live `:latest` tags are moving, not
 one. Confirm every push reports the same digest; a differing digest means a repo
 got a stale image.
 
-## 7. Commit to main
+## 7. Open the PR
 
-Directly on `main`. Verify nothing under `bin/`, `cache-buster.json`, or
-`static/script/generated/` is staged — all three are build output.
+Commit on a feature branch, push it, and `gh pr create`. Verify nothing under
+`bin/`, `cache-buster.json`, or `static/script/generated/` is staged — all three
+are build output. The PR body follows the same shape as the commit.
 
 Match the existing commit style: a one-line summary, then a body of grouped
 bullets that say *why* each change exists and what failure motivated it, closing
 with `Bump Rust lib version to X.Y.Z and JSR lib version to A.B.C.`
 
-## 8. Tag
+## 8. The user merges
+
+Stop and hand over the PR link. The merge is the deploy, and it is the user's
+call. If review changes anything the image is built from, go back to step 2: the
+pushed image no longer matches the PR.
+
+Once merged, `git switch main && git pull` before tagging, so the tag names the
+merge commit.
+
+## 9. Tag
 
 Tags are **lightweight** (`git tag vX.Y.Z`, no `-a`) and take the name from the
 **Rust** workspace version — never the deno one. Push explicitly:
 `git push origin vX.Y.Z`.
 
-## 9. GitHub release
+## 10. GitHub release
 
 `gh release create vX.Y.Z --title "vX.Y.Z" --verify-tag`. The body is a bullet
 changelog grouped by area, with a **Breaking changes** section whenever a
@@ -170,12 +184,12 @@ consuming project must edit something to upgrade, closing with:
 and releases have drifted here before. Check both, and when a tag was never
 released, cover its contents in this changelog so nothing goes undocumented.
 
-## 10. Dry-run both libraries
+## 11. Dry-run both libraries
 
 `make publish_dry_run`. It runs `cargo publish --dry-run`, which **refuses a
 dirty working tree** — which is precisely why this step sits after the commit.
 Run it earlier for a packaging sanity check if you like, but expect that refusal
-until step 7 has landed.
+until step 8 has landed.
 
 Confirm the embedded assets are in the packaged crate:
 
@@ -187,12 +201,12 @@ Two lines of output. Empty output is the dirty-tree refusal on stderr, not a
 missing asset — do not misread one as the other. Why their absence matters is
 the `assets/**` invariant in contribution-guide's `architecture.md`.
 
-## 11. Publish Rust
+## 12. Publish Rust
 
 `cargo publish --package webserver-base`. **Irreversible** — crates.io allows
 yanking, never deletion.
 
-## 12. Publish TypeScript — the user's step
+## 13. Publish TypeScript — the user's step
 
 `deno publish` needs interactive browser auth and fails in an agent shell with
 `error: No means to authenticate`. Do not work around this and do not handle a
@@ -217,6 +231,6 @@ Everything through step 5 is free to retry. From step 6 on, each step is visible
 to someone else, so stop and report rather than pressing ahead — a half-rolled-out
 version is worth a human decision.
 
-The asymmetry worth knowing: steps 6 and 7 are the deploy. If step 11 fails, the
+The asymmetry worth knowing: steps 6 and 8 are the deploy. If step 12 fails, the
 new code is *already in production* and only the library publish is missing,
-which is recoverable. That is why step 10 exists.
+which is recoverable. That is why step 11 exists.

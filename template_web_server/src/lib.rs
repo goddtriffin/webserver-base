@@ -51,8 +51,8 @@ impl Settings {
 /// [`root_dir`](WebServer::root_dir).
 #[must_use]
 pub fn web_server(server: WebServer, settings: Settings) -> WebServer {
-    server.frontend(FrontendParams {
-        base: BaseTemplateData::goddtriffin(GoddtriffinParams {
+    server.frontend(FrontendParams::new(
+        BaseTemplateData::goddtriffin(GoddtriffinParams {
             project: settings.project,
             description: settings.description,
             base_url: settings.base_url,
@@ -63,10 +63,10 @@ pub fn web_server(server: WebServer, settings: Settings) -> WebServer {
             style_sheets: vec![String::from("static/stylesheet/main.css")],
             scripts: vec![],
         }),
-        pages: Pages::new()
+        Pages::new()
             .static_page(PageTemplateData::new("home", "Home", "/"), ())
             .extend_images(["static/image/social/todo.webp"]),
-        analytics: settings.analytics,
-        sentry_browser_dsn: settings.sentry_browser_dsn,
-    })
+        settings.analytics,
+        settings.sentry_browser_dsn,
+    ))
 }

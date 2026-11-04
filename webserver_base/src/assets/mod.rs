@@ -17,6 +17,7 @@ mod probe;
 mod validate;
 
 pub use cache_buster::CacheBuster;
+pub(crate) use cache_buster::mark_never_cached;
 pub use error::CacheBusterError;
 pub use generate::{
     FAVICON_DIRECTORY, FAVICON_PNG_SOURCE, FAVICON_SVG_SOURCE, Phase, STATIC_DIRECTORY,

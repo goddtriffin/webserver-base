@@ -13,6 +13,8 @@ mod frontend;
 #[cfg(all(test, feature = "pages"))]
 mod into_router_tests;
 #[cfg(feature = "pages")]
+mod not_found;
+#[cfg(feature = "pages")]
 mod pages;
 mod server;
 mod shutdown;
@@ -26,5 +28,7 @@ pub use server::{API_PREFIX, DEFAULT_BODY_LIMIT, DEFAULT_PORT, ENV_HOST, ENV_POR
 pub use shutdown::{AppShutdown, DEFAULT_DRAIN_TIMEOUT, Shutdown};
 pub use state::WebServerState;
 
+#[cfg(feature = "pages")]
+pub use not_found::NotFound;
 #[cfg(feature = "pages")]
 pub use pages::Pages;
