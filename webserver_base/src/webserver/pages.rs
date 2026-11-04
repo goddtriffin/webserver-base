@@ -6,11 +6,13 @@
 //! Only pages live here — API routes, WebSocket upgrades and static file
 //! services stay ordinary axum.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{MethodRouter, get};
+use axum_extra::routing::RouterExt;
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use serde_json::Value;
@@ -247,9 +249,28 @@ where
         Ok(urls)
     }
 
-    /// The 404 declaration, if one was made.
     /// Turns every declaration into routes.
-    pub(super) fn into_router(self) -> axum::Router<WebServerState<S>> {
+    ///
+    /// Each page also answers its opposite trailing-slash form with a 308 to
+    /// the declared path, query kept, for every method. The redirect is matched
+    /// by pattern, before any layer on the page's method router runs, so a
+    /// guard or a handler's 404 still answers at the canonical URL.
+    ///
+    /// # Errors
+    ///
+    /// [`WebServerError::DuplicatePagePath`] if two pages share a path, or
+    /// differ only by a trailing slash.
+    pub(super) fn into_router(self) -> Result<axum::Router<WebServerState<S>>, WebServerError> {
+        let mut declared: HashMap<&str, &str> = HashMap::new();
+        for entry in &self.entries {
+            if let Some(first) = declared.insert(without_trailing_slash(&entry.path), &entry.path) {
+                return Err(WebServerError::DuplicatePagePath {
+                    first: first.to_string(),
+                    second: entry.path.clone(),
+                });
+            }
+        }
+
         let mut router: axum::Router<WebServerState<S>> = axum::Router::new();
 
         for entry in self.entries {
@@ -257,11 +278,28 @@ where
                 PageKind::Static { page, data } => static_page_handler(page, data),
                 PageKind::Dynamic(handler) => *handler,
             };
-            router = router.route(&entry.path, method_router);
+            router = if has_trailing_slash_alias(&entry.path) {
+                router.route_with_tsr(&entry.path, method_router)
+            } else {
+                router.route(&entry.path, method_router)
+            };
         }
 
-        router
+        Ok(router)
     }
+}
+
+/// The path with one trailing slash removed, so `/blog` and `/blog/` collide.
+fn without_trailing_slash(path: &str) -> &str {
+    path.strip_suffix('/').unwrap_or(path)
+}
+
+/// Whether a page also answers its opposite trailing-slash form.
+///
+/// Not `/`, which has no other form, and not a wildcard, which already matches
+/// any suffix and cannot be followed by a slash.
+fn has_trailing_slash_alias(path: &str) -> bool {
+    path != "/" && !path.contains("{*")
 }
 
 /// Builds the handler for a page that has no handler function.
@@ -445,7 +483,8 @@ mod tests {
             )
             .unlisted();
 
-        let _router: axum::Router<crate::webserver::WebServerState> = pages.into_router();
+        let _router: axum::Router<crate::webserver::WebServerState> =
+            pages.into_router().expect("no duplicate paths");
     }
 
     #[test]

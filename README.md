@@ -27,7 +27,7 @@ webserver-base = { version = "0.2", features = ["pages", "observability", "prese
 Nothing is enabled by default.
 
 Every crate whose types appear in this library's API is re-exported from its
-root — `webserver_base::{axum, chrono, handlebars, serde_json, tokio, tracing,
+root — `webserver_base::{axum, axum_extra, chrono, handlebars, serde_json, tokio, tracing,
 reqwest, sentry}`, each behind the feature that uses it — so a project builds
 against the same version the library does, and never adds one just to call it.
 
@@ -460,6 +460,25 @@ There is no 404 page to declare — the library routes it; see
 
 `extend_images`, `with_last_modified` and `unlisted` apply to the page declared
 immediately before them.
+
+### Trailing slashes
+
+Every page also answers its other trailing-slash form with a **308** to the
+path exactly as declared, keeping the query and the method: `/blog/?page=2`
+goes to `/blog?page=2`, and `/docs` goes to `/docs/` if that is what you
+declared. The sitemap and `<link rel="canonical">` only ever name the declared
+form.
+
+- The redirect matches the route pattern, before any layer on the page's method
+  router. A guard still answers at the canonical URL. A handler that returns
+  `state.not_found` gets the redirect first and then the 404, so the two forms
+  never disagree.
+- `/` and wildcard paths (`/files/{*path}`) get no alias: one has no other form,
+  and the other already matches it.
+- Declaring two pages that differ only by a trailing slash, or the same path
+  twice, fails the boot with `WebServerError::DuplicatePagePath`.
+- Your own `.merge`/`.nest` routes are ordinary axum and are not aliased. Opt
+  one in with `webserver_base::axum_extra::routing::RouterExt::route_with_tsr`.
 
 ## Sitemaps
 

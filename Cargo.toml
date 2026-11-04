@@ -3,7 +3,7 @@ members = ["webserver_base", "template_web_server"]
 resolver = "2"
 
 [workspace.package]
-version = "0.2.5"
+version = "0.2.6"
 edition = "2024"
 rust-version = "1.98"
 authors = ["Todd Everett Griffin <tgriffin115@gmail.com>"]
@@ -55,7 +55,7 @@ axum = { version = "0.8.9", features = [
   "macros",
   "tokio",
 ] }
-axum-extra = "0.12.6"
+axum-extra = { version = "0.12.6", features = ["routing"] }
 tower = { version = "0.5.3", features = ["full"] }
 tower-http = { version = "0.7.0", features = ["full"] }
 reqwest = { version = "0.13.4", default-features = false, features = [

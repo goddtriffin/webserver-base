@@ -89,6 +89,16 @@ pub enum WebServerError {
          use `dynamic_page_group` with concrete urls, or mark it unlisted"
     )]
     DynamicPagePathHasParameters { path: String },
+
+    /// Two pages were declared at one path, or at paths that differ only by a
+    /// trailing slash. Every page already answers its opposite trailing-slash
+    /// form with a redirect, so both cannot be routed.
+    #[cfg(feature = "pages")]
+    #[error(
+        "pages `{first}` and `{second}` collide: each page already redirects its \
+         other trailing-slash form, so declare one of them only"
+    )]
+    DuplicatePagePath { first: String, second: String },
 }
 
 impl IntoResponse for WebServerError {

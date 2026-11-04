@@ -62,6 +62,8 @@ pub use tracing;
 
 #[cfg(any(feature = "webserver", feature = "analytics"))]
 pub use axum;
+#[cfg(feature = "webserver")]
+pub use axum_extra;
 #[cfg(any(
     feature = "templates",
     feature = "sitemap",
