@@ -12,7 +12,7 @@ use axum::routing::get;
 use axum::{Router, serve};
 use tokio::net::TcpListener;
 use tower_http::LatencyUnit;
-use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
+use tower_http::trace::{DefaultOnResponse, TraceLayer};
 use tracing::{Level, error, info, instrument, warn};
 
 use crate::env;
@@ -21,6 +21,7 @@ use crate::environment::Environment;
 use super::error::WebServerError;
 use super::shutdown::{AppShutdown, DEFAULT_DRAIN_TIMEOUT, Shutdown};
 use super::state::{StateParts, WebServerState};
+use super::telemetry;
 
 /// The environment variable holding the bind host.
 pub const ENV_HOST: &str = "WSB_HOST";
@@ -259,7 +260,12 @@ where
             state,
             host,
             port,
+            environment,
         } = self.assemble(shutdown.clone())?;
+
+        if environment.is_production() {
+            tokio::spawn(telemetry::serve_metrics(shutdown.clone()));
+        }
 
         serve_on(router, &host, port, shutdown, async move {
             state.app().on_shutdown().await;
@@ -373,39 +379,55 @@ where
             app,
         });
 
-        // Applied outermost-last, so the body cap runs before tracing sees a
-        // request it may never finish reading.
         // The router takes the state by value; `run`'s cleanup needs it after
         // serving ends, and `WebServerState` is an `Arc` so this is a refcount.
-        let app_router: Router = app_router
-            .with_state(state.clone())
-            .layer(
-                TraceLayer::new_for_http()
-                    // The span carries the method and URI, and the response
-                    // event is logged inside it. Left at its default DEBUG
-                    // level the span is never created under an INFO filter, so
-                    // every request logs a status and a latency with no way to
-                    // tell which route it was.
-                    .make_span_with(
-                        DefaultMakeSpan::new()
-                            .level(Level::INFO)
-                            .include_headers(false),
-                    )
-                    .on_response(
-                        DefaultOnResponse::new()
-                            .level(Level::INFO)
-                            .latency_unit(LatencyUnit::Millis),
-                    ),
-            )
-            .layer(DefaultBodyLimit::max(body_limit));
+        let app_router: Router = with_middleware(app_router.with_state(state.clone()), body_limit);
 
         Ok(Assembled {
             router: app_router,
             state,
             host,
             port,
+            environment,
         })
     }
+}
+
+/// Every server's middleware, innermost first: route metrics (they need the
+/// matched route), tracing, the request id (outside tracing, so the span sees
+/// it), then the body cap (outermost, so tracing never sees a request it may
+/// never finish reading).
+fn with_middleware(router: Router, body_limit: usize) -> Router {
+    router
+        .layer(axum::middleware::from_fn(telemetry::http_metrics))
+        .layer(
+            TraceLayer::new_for_http()
+                // At INFO: under an INFO filter a DEBUG span is never created,
+                // and every request would log a status with no route. `path`,
+                // not the URI: query strings can carry one-time codes and
+                // tokens. `request_id` joins these lines to nginx's access log.
+                .make_span_with(|request: &axum::http::Request<axum::body::Body>| {
+                    let request_id: &str = request
+                        .headers()
+                        .get(&telemetry::REQUEST_ID_HEADER)
+                        .and_then(|value| value.to_str().ok())
+                        .unwrap_or_default();
+                    tracing::info_span!(
+                        "request",
+                        method = %request.method(),
+                        path = %request.uri().path(),
+                        version = ?request.version(),
+                        request_id,
+                    )
+                })
+                .on_response(
+                    DefaultOnResponse::new()
+                        .level(Level::INFO)
+                        .latency_unit(LatencyUnit::Millis),
+                ),
+        )
+        .layer(axum::middleware::from_fn(telemetry::request_id))
+        .layer(DefaultBodyLimit::max(body_limit))
 }
 
 /// A server ready to bind: what [`WebServer::run`] serves and what it cleans
@@ -417,6 +439,7 @@ struct Assembled<S> {
     state: WebServerState<S>,
     host: String,
     port: u16,
+    environment: Environment,
 }
 
 /// Attaches the 404 fallback.

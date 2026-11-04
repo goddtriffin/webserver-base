@@ -751,16 +751,19 @@ Format follows the environment, because a human reads one and a machine reads
 the other:
 
 ```
-local       INFO request{method=GET uri=/robots.txt version=HTTP/1.1}:
+local       INFO request{method=GET path=/robots.txt version=HTTP/1.1 request_id=…}:
                  finished processing request latency=0 ms status=200
 
 production  {"timestamp":"…","level":"INFO","message":"finished processing request",
-             "span":{"name":"request","method":"GET","uri":"/robots.txt"},
+             "span":{"name":"request","method":"GET","path":"/robots.txt","request_id":"…"},
              "status":200,"latency":"0 ms","target":"tower_http::trace::on_response"}
 ```
 
 Production JSON is `flatten_event`ed with the current span attached, so `method`,
-`uri`, `status` and `latency` are queryable fields rather than a string to grep.
+`path`, `request_id`, `status` and `latency` are queryable fields rather than a
+string to grep. The span logs the **path, never the query string**: query strings
+carry one-time codes and tokens (OAuth callbacks), and every line of the request
+would repeat them.
 ANSI colour is off there too — a log driver stores escape codes verbatim and
 nothing downstream strips them.
 
@@ -803,6 +806,46 @@ response headers at the edge rather than inferring it from volume here.
 seen. Therefore: a boot failure for misconfiguration that makes the site wrong;
 `error!` for "boots, but a feature is silently degraded"; `warn!`/`info!` only
 for things nobody needs to act on.
+
+## Request ids and metrics
+
+On for every server; nothing to configure.
+
+**Request ids.** Each request gets an `X-Request-ID`: the one nginx sent (the id
+of its access-log line), or a fresh UUID when none came or it isn't 1 to 64
+characters of `[A-Za-z0-9_-]`. It is put on the request span, so **every log line
+of the request carries `request_id`**, and echoed on the response. Search one id
+to see the nginx line and everything the app logged for it.
+
+**Metrics.** In production, `/metrics` (Prometheus text format) is served on
+**`METRICS_PORT` (9000)**, a second listener that is never published: each
+container has its own network, so the fixed port never collides, and only a
+scraper on the host can reach it. Not served locally, where two projects running
+at once would collide. Every server exports:
+
+| metric | labels |
+|---|---|
+| `http_requests_total` | `method`, `route`, `status` |
+| `http_request_duration_seconds` (histogram, 5 ms to 10 s) | `method`, `route` |
+| `http_requests_in_flight` | |
+| `build_info` (always 1) | `release` (`my-project@1.2.3`), `webserver_base` |
+
+`route` is the **route pattern** (`/blog/{slug}`), never the raw path, and every
+unmatched path shares `unmatched`, so a crawler cannot grow the series count.
+Unusual methods share `other` for the same reason.
+
+Your own metrics use the re-exported [`metrics`](https://docs.rs/metrics) crate
+and appear on the same endpoint:
+
+```rust
+use webserver_base::metrics::counter;
+
+counter!("games_played_total", "game" => "sokoban").increment(1);
+```
+
+Label values must come from a small fixed set (a game, a mode), never from user
+input or ids: each distinct value is a new series. A `/metrics` port that cannot
+be bound is reported to Sentry and the site keeps serving.
 
 ## Telegram
 

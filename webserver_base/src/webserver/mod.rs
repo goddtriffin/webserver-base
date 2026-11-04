@@ -19,6 +19,7 @@ mod pages;
 mod server;
 mod shutdown;
 mod state;
+mod telemetry;
 
 pub use bootstrap::bootstrap_with_release;
 pub use error::WebServerError;
@@ -27,6 +28,7 @@ pub use frontend::{Frontend, FrontendParams, WellKnown};
 pub use server::{API_PREFIX, DEFAULT_BODY_LIMIT, DEFAULT_PORT, ENV_HOST, ENV_PORT, WebServer};
 pub use shutdown::{AppShutdown, DEFAULT_DRAIN_TIMEOUT, Shutdown};
 pub use state::WebServerState;
+pub use telemetry::{METRICS_PORT, REQUEST_ID_HEADER};
 
 #[cfg(feature = "pages")]
 pub use not_found::NotFound;
