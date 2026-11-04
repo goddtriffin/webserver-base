@@ -34,14 +34,6 @@ pub enum CacheBusterError {
         source: std::io::Error,
     },
 
-    /// A `.js` file's `sourceMappingURL` comment could not be rewritten.
-    #[error("failed to rewrite the source map reference in `{path}`")]
-    SourceMap {
-        path: PathBuf,
-        #[source]
-        source: std::io::Error,
-    },
-
     /// The static-asset pipeline was run somewhere without a `static/`.
     #[error(
         "`{path}` does not exist. The static-asset pipeline runs from the \

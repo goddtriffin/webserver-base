@@ -60,7 +60,6 @@ webserver = [
   "dep:metrics",
   "dep:metrics-exporter-prometheus",
   "dep:md5",
-  "dep:regex",
   "dep:chrono",
   "dep:resvg",
   "dep:imagesize",
@@ -110,8 +109,9 @@ metrics-exporter-prometheus = { workspace = true, optional = true }
 # webserver (serve loop), telegram (delivery worker)
 tokio = { workspace = true, optional = true }
 
-# static assets (content hashing + source-map rewriting)
+# static assets (content hashing), feed (ETag)
 md5 = { workspace = true, optional = true }
+# feed (rewriting relative links to absolute)
 regex = { workspace = true, optional = true }
 
 # static assets (generating the icon set from favicon.svg, and reading the
