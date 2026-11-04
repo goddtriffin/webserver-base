@@ -30,8 +30,18 @@ Every crate whose types appear in this library's API is re-exported from its
 root — `webserver_base::{axum, chrono, handlebars, serde_json, tokio, tracing,
 reqwest, sentry}`, each behind the feature that uses it — so a project builds
 against the same version the library does, and never adds one just to call it.
-Keep a direct `serde` dependency anyway: `#[derive(Serialize)]` generates code
-naming `::serde`.
+
+Three keep a direct dependency when their macros are used, because those macros
+name the crate by its absolute path, which a re-export cannot satisfy:
+
+| crate | keep it direct when the project uses | expands to |
+|---|---|---|
+| `serde` | `#[derive(Serialize, Deserialize)]` | `::serde::…` |
+| `tracing` | `#[instrument]` | `::tracing::…` |
+| `tokio` | `#[tokio::main]` / `#[tokio::test]` (a dev-dependency suffices for tests) | `::tokio::…` |
+
+Everything else — including `tracing::info!` and friends, which resolve through
+`$crate` — works through the re-export.
 
 | feature | what it gives you |
 |---|---|
