@@ -2773,7 +2773,7 @@ dependencies = [
 
 [[package]]
 name = "template-web-server"
-version = "0.2.6"
+version = "0.2.7"
 dependencies = [
  "axum",
  "tokio",
@@ -3450,7 +3450,7 @@ dependencies = [
 
 [[package]]
 name = "webserver-base"
-version = "0.2.6"
+version = "0.2.7"
 dependencies = [
  "atom_syndication",
  "axum",
