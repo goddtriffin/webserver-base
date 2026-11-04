@@ -272,6 +272,10 @@ where
     /// The one assembly path, so the router [`into_router`](WebServer::into_router)
     /// hands a test cannot drift from the one production serves.
     #[instrument(skip_all)]
+    #[cfg_attr(
+        not(feature = "pages"),
+        expect(unused_mut, reason = "only a frontend merges routes into the router")
+    )]
     fn assemble(self, shutdown: Shutdown) -> Result<Assembled<S>, WebServerError> {
         let Self {
             host,

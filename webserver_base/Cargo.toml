@@ -139,6 +139,11 @@ tracing-subscriber = { workspace = true, optional = true }
 # consumers never build with it.
 tokio = { workspace = true, features = ["test-util"] }
 
+# The Telegram notifier's tests stand up a fake Bot API. Without this a
+# `telegram`-only test build cannot compile, since only `webserver` and
+# `analytics` pull axum in.
+axum = { workspace = true }
+
 # Feed oracles. `roxmltree` proves well-formedness with a parser that is not the
 # one that wrote the document, because a generator checked by its own parser
 # waves through exactly the emit-and-accept bug the check exists for. `rss` and
