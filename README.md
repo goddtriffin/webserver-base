@@ -430,6 +430,16 @@ reconcile this claim against the wider web. The `goddtriffin` preset defaults to
 `Person`; a project that is a business or a band overrides it with
 `with_site_entity`.
 
+### Todd's social profiles
+
+`GODDTRIFFIN_SOCIALS` (`preset`) is the one list of Todd's social profiles, in
+display order: each `Social` has a `label`, an `href` and an `icon` (SVG path data
+for a `0 0 24 24` view box, drawn in `currentColor`). `GODDTRIFFIN_SEE_ALSO`, the
+preset's `og:see_also`, is derived from it (the site, then these URLs), so a
+project's icon row and its metadata cannot drift. Pass it to templates as site
+data and render each entry as `<svg viewBox="0 0 24 24"><path d="{{icon}}"/></svg>`.
+Adding, dropping or reordering a network is an edit here only.
+
 ### JSON-LD
 
 On the **home page only** — Google requires `WebSite` markup at the domain root —

@@ -30,4 +30,4 @@ pub use site_entity::SiteEntity;
 pub use theme::{Fallback, THEME_STORAGE_KEY, ThemeColor, ThemeColorTag, ThemeScript};
 
 #[cfg(feature = "preset")]
-pub use base::{GODDTRIFFIN_SEE_ALSO, GoddtriffinParams};
+pub use base::{GODDTRIFFIN_SEE_ALSO, GODDTRIFFIN_SOCIALS, GoddtriffinParams, Social};
