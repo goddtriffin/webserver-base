@@ -316,17 +316,19 @@ fn normalize_asset_path(path: &str) -> String {
 // preset
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Todd Everett Griffin's other web presences, emitted as `og:see_also`.
+/// Todd Griffin's web presences, emitted as `og:see_also`: his site first, then his social profiles in the
+/// order every project shows them (X, `LinkedIn`, `GitHub`, `YouTube`, Instagram, Facebook, Reddit, `itch.io`).
 #[cfg(feature = "preset")]
-pub const GODDTRIFFIN_SEE_ALSO: [&str; 8] = [
+pub const GODDTRIFFIN_SEE_ALSO: [&str; 9] = [
     "https://www.toddgriffin.me/",
     "https://x.com/goddtriffin",
+    "https://www.linkedin.com/in/todd-griffin/",
     "https://github.com/goddtriffin",
-    "https://www.instagram.com/goddtriffin/",
     "https://www.youtube.com/@goddtriffin",
+    "https://www.instagram.com/goddtriffin/",
     "https://www.facebook.com/goddtriffin/",
-    "https://stackoverflow.com/users/11767294/goddtriffin",
     "https://www.reddit.com/user/goddtriffin",
+    "https://goddtriffin.itch.io/",
 ];
 
 /// Everything [`BaseTemplateData::goddtriffin`] cannot know for you.
@@ -535,33 +537,33 @@ mod tests {
 
     #[cfg(feature = "preset")]
     #[test]
-    fn the_preset_see_also_leads_with_the_personal_site_then_x_then_github() {
+    fn the_preset_see_also_is_the_site_then_the_socials_in_order() {
         use super::GODDTRIFFIN_SEE_ALSO;
 
-        let expected: [&str; 3] = [
+        let expected: [&str; 9] = [
             "https://www.toddgriffin.me/",
             "https://x.com/goddtriffin",
+            "https://www.linkedin.com/in/todd-griffin/",
             "https://github.com/goddtriffin",
+            "https://www.youtube.com/@goddtriffin",
+            "https://www.instagram.com/goddtriffin/",
+            "https://www.facebook.com/goddtriffin/",
+            "https://www.reddit.com/user/goddtriffin",
+            "https://goddtriffin.itch.io/",
         ];
-        let actual: [&str; 3] = [
-            GODDTRIFFIN_SEE_ALSO[0],
-            GODDTRIFFIN_SEE_ALSO[1],
-            GODDTRIFFIN_SEE_ALSO[2],
-        ];
-        assert_eq!(expected, actual);
-
+        assert_eq!(expected, GODDTRIFFIN_SEE_ALSO);
         assert!(
             !GODDTRIFFIN_SEE_ALSO
                 .iter()
-                .any(|url| url.contains("twitter.com")),
-            "twitter.com was replaced by x.com"
+                .any(|url| url.contains("twitter.com") || url.contains("stackoverflow.com")),
+            "twitter.com was replaced by x.com; Stack Overflow is dropped"
         );
     }
 
     #[cfg(feature = "preset")]
     #[test]
     fn a_preset_field_can_still_be_overridden() {
-        use super::GoddtriffinParams;
+        use super::{GODDTRIFFIN_SEE_ALSO, GoddtriffinParams};
 
         let base: BaseTemplateData = BaseTemplateData::goddtriffin(GoddtriffinParams {
             project: String::from("Triple Entendre"),
@@ -581,7 +583,7 @@ mod tests {
         let actual_handle: String = base.twitter_username().to_string();
         assert_eq!(expected_handle, actual_handle);
 
-        let expected_len: usize = 9;
+        let expected_len: usize = GODDTRIFFIN_SEE_ALSO.len() + 1;
         let actual_len: usize = base.see_also().len();
         assert_eq!(expected_len, actual_len);
     }
