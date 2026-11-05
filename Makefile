@@ -177,7 +177,6 @@ docker_push: ## pushes Docker images to Docker Hub
 	docker tag goddtriffin/template-web-server:latest goddtriffin/turnbased-website:latest
 	docker tag goddtriffin/template-web-server:latest goddtriffin/scribble-jump-website:latest
 	docker tag goddtriffin/template-web-server:latest goddtriffin/video-game-recipe-book-website:latest
-	docker tag goddtriffin/template-web-server:latest goddtriffin/vogue-bot-website:latest
 	docker tag goddtriffin/template-web-server:latest goddtriffin/5dcheckers-server:latest
 	docker tag goddtriffin/template-web-server:latest goddtriffin/5ddiplomacy-server:latest
 
@@ -186,6 +185,5 @@ docker_push: ## pushes Docker images to Docker Hub
 	docker push goddtriffin/turnbased-website:latest
 	docker push goddtriffin/scribble-jump-website:latest
 	docker push goddtriffin/video-game-recipe-book-website:latest
-	docker push goddtriffin/vogue-bot-website:latest
 	docker push goddtriffin/5dcheckers-server:latest
 	docker push goddtriffin/5ddiplomacy-server:latest

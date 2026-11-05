@@ -18,7 +18,7 @@ change is finished.
 **Do not run steps that nothing changed.** Version bumps, smoke tests, image
 pushes and publishes are each earned by a change to what they cover. A
 docs-only change that bumps a version ships a release consumers must read for
-nothing, and re-pushes seven production images for nothing.
+nothing, and re-pushes six production images for nothing.
 
 Diff against `main` and classify:
 
@@ -136,12 +136,13 @@ bump: go back to step 3.
 
 ## 6. Push the image — before the PR is merged
 
-`make docker_push` tags the single built image into **seven** production Docker
+`make docker_push` tags the single built image into **six** production Docker
 Hub repos and pushes each: `scannable-codes-website`, `turnbased-website`,
-`scribble-jump-website`, `video-game-recipe-book-website`, `vogue-bot-website`,
-`5dcheckers-server`, `5ddiplomacy-server`.
+`scribble-jump-website`, `video-game-recipe-book-website`,
+`5dcheckers-server`, `5ddiplomacy-server`. (`vogue-bot-website` is not one of
+them: since 2026-11-05 the `goddtriffin/vogue-bot` repo builds and pushes it.)
 
-Say so plainly when reporting it — seven live `:latest` tags are moving, not
+Say so plainly when reporting it — six live `:latest` tags are moving, not
 one. Confirm every push reports the same digest; a differing digest means a repo
 got a stale image.
 
