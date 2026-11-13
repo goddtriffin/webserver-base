@@ -65,15 +65,16 @@ still holds the old image — production runs stale code, with no error anywhere
 | 5 | Tear down | `make docker_stop` |
 | 6 | **Push the image** | `make docker_push` |
 | 7 | **Open the PR** | commit on a branch, `git push -u`, `gh pr create` |
-| 8 | **The user merges** | wait; never merge it yourself |
+| 8 | **Merge the PR** | `gh pr merge --merge` |
 | 9 | Tag | `git tag vX.Y.Z` + `git push origin vX.Y.Z` |
 | 10 | GitHub release | `gh release create` |
 | 11 | Dry-run both libs | `make publish_dry_run` |
 | 12 | Publish Rust | `cargo publish --package webserver-base` |
 | 13 | Publish TypeScript | **the user runs** `deno publish` |
 
-Every change ships through a pull request the user reviews and merges by hand.
-Never commit or push to `main` directly.
+Every change ships through a pull request. Todd has authorized agents to merge
+it themselves once steps 2–6 are done (and to commit straight to `main` when a
+change earns no image or publish steps, e.g. docs).
 
 ---
 
@@ -156,11 +157,11 @@ Match the existing commit style: a one-line summary, then a body of grouped
 bullets that say *why* each change exists and what failure motivated it, closing
 with `Bump Rust lib version to X.Y.Z and JSR lib version to A.B.C.`
 
-## 8. The user merges
+## 8. Merge the PR
 
-Stop and hand over the PR link. The merge is the deploy, and it is the user's
-call. If review changes anything the image is built from, go back to step 2: the
-pushed image no longer matches the PR.
+`gh pr merge --merge`. The merge is the deploy, so only merge once the image is
+pushed. If anything the image is built from changes after the push, go back to
+step 2: the pushed image no longer matches the PR.
 
 Once merged, `git switch main && git pull` before tagging, so the tag names the
 merge commit.
