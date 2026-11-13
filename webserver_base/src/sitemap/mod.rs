@@ -14,6 +14,8 @@
 
 use chrono::{DateTime, Utc};
 use sitemap_rs::image::Image;
+use sitemap_rs::jiff::tz::TimeZone;
+use sitemap_rs::jiff::{Timestamp, Zoned};
 use sitemap_rs::sitemap::Sitemap;
 use sitemap_rs::sitemap_index::SitemapIndex;
 use sitemap_rs::url::Url;
@@ -61,11 +63,20 @@ pub enum SitemapError {
         source: sitemap_rs::sitemap_index_error::SitemapIndexError,
     },
 
+    /// A `<lastmod>` date lies outside the years -9999 to 9999, which
+    /// `sitemap-rs` cannot represent.
+    #[error("the last-modified date of `{location}` is out of range: use a real modification date")]
+    LastModified {
+        location: String,
+        #[source]
+        source: sitemap_rs::jiff::Error,
+    },
+
     /// The XML could not be serialized.
     #[error("failed to serialize the sitemap")]
     Write {
         #[source]
-        source: xml_builder::XMLError,
+        source: std::io::Error,
     },
 
     /// Serialized XML was not valid UTF-8, which cannot happen for input this
@@ -163,7 +174,7 @@ impl SitemapUrl {
 
         let mut builder: UrlBuilder = Url::builder(location.clone());
         if let Some(last_modified) = self.last_modified.or(fallback_last_modified) {
-            builder.last_modified(DateTime::from(last_modified));
+            builder.last_modified(to_zoned(&location, last_modified)?);
         }
 
         if !self.images.is_empty() {
@@ -248,12 +259,13 @@ pub fn build_sitemaps(
 
     let sitemaps: Vec<Sitemap> = (1..=chunks.len())
         .map(|n| {
-            Sitemap::new(
-                absolute(base_url, &format!("/sitemap-{n}.xml")),
-                fallback_last_modified.map(DateTime::from),
-            )
+            let location: String = absolute(base_url, &format!("/sitemap-{n}.xml"));
+            let last_modified: Option<Zoned> = fallback_last_modified
+                .map(|last_modified| to_zoned(&location, last_modified))
+                .transpose()?;
+            Ok(Sitemap::new(location, last_modified))
         })
-        .collect();
+        .collect::<Result<Vec<Sitemap>, SitemapError>>()?;
 
     let count: usize = sitemaps.len();
     let index: SitemapIndex =
@@ -304,6 +316,17 @@ fn render_url_set(
     Ok(rendered)
 }
 
+/// Converts a `<lastmod>` date to the type `sitemap-rs` takes. UTC in, UTC
+/// out, so it is written with a `+00:00` offset.
+fn to_zoned(location: &str, date: DateTime<Utc>) -> Result<Zoned, SitemapError> {
+    Timestamp::new(date.timestamp(), 0)
+        .map(|timestamp: Timestamp| timestamp.to_zoned(TimeZone::UTC))
+        .map_err(|source| SitemapError::LastModified {
+            location: location.to_string(),
+            source,
+        })
+}
+
 /// Joins a site origin and a path, tolerating a slash on either side or both.
 fn absolute(base_url: &str, path: &str) -> String {
     if path.starts_with("http://") || path.starts_with("https://") {
@@ -322,7 +345,7 @@ fn absolute(base_url: &str, path: &str) -> String {
 mod tests {
     use chrono::{DateTime, TimeZone, Utc};
 
-    use super::{SitemapSet, SitemapUrl, absolute, build_sitemaps};
+    use super::{SitemapError, SitemapSet, SitemapUrl, absolute, build_sitemaps};
 
     #[test]
     fn joining_never_doubles_or_drops_a_slash() {
@@ -433,6 +456,39 @@ mod tests {
 
         assert!(set.chunks()[0].contains("2026-01-02"));
         assert!(set.chunks()[0].contains("2020-01-01"));
+    }
+
+    #[test]
+    fn a_utc_date_is_written_with_seconds_and_an_explicit_offset() {
+        let date: DateTime<Utc> = Utc.with_ymd_and_hms(2026, 1, 2, 3, 4, 5).unwrap();
+        let urls: Vec<SitemapUrl> = vec![SitemapUrl::new("/").with_last_modified(date)];
+        let set: SitemapSet =
+            build_sitemaps("https://www.example.com", &urls, Some(date)).expect("builds");
+
+        assert!(
+            set.chunks()[0].contains("<lastmod>2026-01-02T03:04:05+00:00</lastmod>"),
+            "{}",
+            set.chunks()[0]
+        );
+        assert!(
+            set.index()
+                .contains("<lastmod>2026-01-02T03:04:05+00:00</lastmod>"),
+            "{}",
+            set.index()
+        );
+    }
+
+    #[test]
+    fn a_date_sitemap_rs_cannot_represent_is_an_error_naming_the_page() {
+        let date: DateTime<Utc> = Utc.with_ymd_and_hms(10_000, 1, 1, 0, 0, 0).unwrap();
+        let urls: Vec<SitemapUrl> = vec![SitemapUrl::new("/blog").with_last_modified(date)];
+
+        let actual: Option<String> = match build_sitemaps("https://www.example.com", &urls, None) {
+            Err(SitemapError::LastModified { location, .. }) => Some(location),
+            _ => None,
+        };
+        let expected: Option<String> = Some(String::from("https://www.example.com/blog"));
+        assert_eq!(expected, actual);
     }
 
     #[test]

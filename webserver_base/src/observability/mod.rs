@@ -10,7 +10,9 @@
 
 use std::fmt::{self, Debug, Formatter};
 
-use tracing::{info, instrument, warn};
+use sentry::integrations::tracing::{BreadcrumbLayer, ErrorLayer, SpanLayer};
+use tracing::{Level, info, instrument, warn};
+use tracing_subscriber::filter::{LevelFilter, filter_fn};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{EnvFilter, Layer};
@@ -178,8 +180,16 @@ impl Observability {
 
         tracing_subscriber::registry()
             .with(format)
-            // Harmless without Sentry: the layer forwards to a disabled hub.
-            .with(sentry::integrations::tracing::layer())
+            // Harmless without Sentry: the layers forward to a disabled hub.
+            // Together they are the retired `sentry_tracing::layer()`'s
+            // defaults: INFO+ spans become transactions, `error!` an event, and
+            // `warn!`/`info!` breadcrumbs. The breadcrumb filter must exclude
+            // ERROR, or every error would also ride along as its own crumb.
+            .with(SpanLayer::new().with_filter(LevelFilter::INFO))
+            .with(BreadcrumbLayer::new().with_filter(filter_fn(|metadata| {
+                matches!(*metadata.level(), Level::WARN | Level::INFO)
+            })))
+            .with(ErrorLayer::new().with_filter(LevelFilter::ERROR))
             .init();
 
         // The one thing no other log line can tell you: which build is running.

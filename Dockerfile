@@ -2,7 +2,7 @@
 # Binary #
 ##########
 
-FROM rust:1.98.0-alpine3.24 AS binary_builder
+FROM rust:1.100.0-alpine3.24 AS binary_builder
 
 # update alpine linux dependencies
 RUN apk update
@@ -11,7 +11,6 @@ RUN apk add --no-cache git make musl-dev
 WORKDIR /template-web-server
 
 # copy required files
-COPY .clippy.toml .
 COPY Cargo.toml .
 COPY Cargo.lock .
 COPY template_web_server template_web_server

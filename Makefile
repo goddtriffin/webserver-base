@@ -120,13 +120,13 @@ test: assets ## runs tests; the template's tests serve the bin/ that assets buil
 
 	cargo fmt --check
 	cargo check --all-features
-	cargo clippy --all-targets --all-features
+	cargo clippy --workspace --all-targets --all-features -- -D warnings
 	cargo test --all-features
 
 .PHONY: fix
 fix: ## fixes the codebase
 	cargo fix --all-features --allow-dirty --allow-staged
-	cargo clippy --all-features --fix --allow-dirty --allow-staged
+	cargo clippy --workspace --all-targets --all-features --fix --allow-dirty --allow-staged
 
 .PHONY: docs
 docs: ## generates local documentation
