@@ -33,7 +33,7 @@ templates = ["dep:handlebars", "dep:chrono"]
 analytics = ["dep:axum", "dep:reqwest"]
 
 # sitemap.xml generation.
-sitemap = ["dep:sitemap-rs", "dep:xml-builder", "dep:chrono"]
+sitemap = ["dep:sitemap-rs", "dep:chrono"]
 
 # RSS 2.0, Atom 1.0 and JSON Feed 1.1 for a site's one content stream.
 # `md5` is for the ETag: a feed is the most-polled document a site serves, so a
@@ -130,7 +130,6 @@ reqwest = { workspace = true, optional = true, features = ["multipart"] }
 
 # sitemap
 sitemap-rs = { workspace = true, optional = true }
-xml-builder = { workspace = true, optional = true }
 
 # feed
 quick-xml = { workspace = true, optional = true }
