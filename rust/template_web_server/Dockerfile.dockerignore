@@ -1,0 +1,19 @@
+# Ignore rules for rust/template_web_server/Dockerfile. The build context is the
+# repo root, so every pattern is relative to it.
+
+# Build output and anything no stage copies.
+**/target/
+**/bin/
+.git/
+.github/
+.claude/
+.idea/
+.vscode/
+
+# `COPY ... static/` would otherwise carry a host-generated cache-buster into
+# the image and feed the JS build a stale manifest. And everything under
+# static/ is hashed and served, so a .DS_Store would get a public URL.
+**/cache-buster.json
+**/static/script/generated/
+**/.DS_Store
+**/.template-web-server.env

@@ -24,10 +24,10 @@ Diff against `main` and classify:
 
 | what changed | earns |
 |---|---|
-| `webserver_base/**` (the Rust lib) | Cargo bump, tag, release, crates.io publish — **and** the image steps, because the binary embeds the library |
-| `static/script/webserver-base/**` (the TS lib) | `deno.jsonc` PATCH bump, JSR publish |
-| `template_web_server/**`, `html/**`, `static/` (art, styles, non-lib scripts), `Dockerfile`, `Makefile` | the image steps: build, smoke test, push |
-| `README.md`, `AGENTS.md`, `CLAUDE.md`, `.claude/**`, other docs | nothing but the pull request |
+| `rust/webserver_base/**` (the Rust lib) | Cargo bump, tag, release, crates.io publish — **and** the image steps, because the binary embeds the library |
+| `typescript/webserver-base/**` (the TS lib) | `typescript/deno.jsonc` PATCH bump, JSR publish |
+| `rust/template_web_server/**` (the crate, its `html/`, `static/`, `Dockerfile`), `rust/Cargo.lock`, `Makefile` | the image steps: build, smoke test, push |
+| any `README.md`, `AGENTS.md`, `CLAUDE.md`, `.claude/**`, other docs | nothing but the pull request |
 
 Then run only the steps those rows earn, **in the order below**, skipping the
 rest. The order never changes; only which steps are present.
@@ -58,7 +58,7 @@ still holds the old image — production runs stale code, with no error anywhere
 
 | # | Step | Command |
 |---|---|---|
-| 1 | **Bump versions** | edit `Cargo.toml` + `deno.jsonc` |
+| 1 | **Bump versions** | edit `rust/Cargo.toml` + `typescript/deno.jsonc` |
 | 2 | Green gate | `make lint test` |
 | 3 | Build the image | `make docker_build` |
 | 4 | E2E smoke test | `make docker_run`, then browse |
@@ -66,11 +66,11 @@ still holds the old image — production runs stale code, with no error anywhere
 | 6 | **Push the image** | `make docker_push` |
 | 7 | **Open the PR** | commit on a branch, `git push -u`, `gh pr create` |
 | 8 | **Merge the PR** | `gh pr merge --merge` |
-| 9 | Tag | `git tag vX.Y.Z` + `git push origin vX.Y.Z` |
+| 9 | Tag | `git tag webserver-base-vX.Y.Z` + `git push origin webserver-base-vX.Y.Z` |
 | 10 | GitHub release | `gh release create` |
 | 11 | Dry-run both libs | `make publish_dry_run` |
-| 12 | Publish Rust | `cargo publish --package webserver-base` |
-| 13 | Publish TypeScript | **the user runs** `deno publish` |
+| 12 | Publish Rust | `cd rust && cargo publish --package webserver-base` |
+| 13 | Publish TypeScript | **the user runs** `cd typescript && deno publish` |
 
 Every change ships through a pull request. Todd has authorized agents to merge
 it themselves once steps 2–6 are done (and to commit straight to `main` when a
@@ -150,7 +150,7 @@ got a stale image.
 ## 7. Open the PR
 
 Commit on a feature branch, push it, and `gh pr create`. Verify nothing under
-`bin/`, `cache-buster.json`, or `static/script/generated/` is staged — all three
+`bin/`, `cache-buster.json`, or `static/script/generated/` is staged (anywhere in the tree) — all three
 are build output. The PR body follows the same shape as the commit.
 
 Match the existing commit style: a one-line summary, then a body of grouped
@@ -168,21 +168,27 @@ merge commit.
 
 ## 9. Tag
 
-Tags are **lightweight** (`git tag vX.Y.Z`, no `-a`) and take the name from the
-**Rust** workspace version — never the deno one. Push explicitly:
-`git push origin vX.Y.Z`.
+Tags are **lightweight** (`git tag webserver-base-vX.Y.Z`, no `-a`) and take the
+version from the **Rust** workspace — never the deno one. Push explicitly:
+`git push origin webserver-base-vX.Y.Z`.
+
+toddstack holds several packages, so every tag names its package
+(`webserver-base-vX.Y.Z`, `toddstack-accounts-vX.Y.Z`). Tags up to `v0.3.0` predate
+the rename and use the bare form. Bare `X.Y.Z` tags are reserved: Swift Package
+Manager reads a repo's plain semver tags as its versions, so they belong to a
+future Swift package.
 
 ## 10. GitHub release
 
-`gh release create vX.Y.Z --title "vX.Y.Z" --verify-tag`. The body is a bullet
+`gh release create webserver-base-vX.Y.Z --title "webserver-base vX.Y.Z" --verify-tag`. The body is a bullet
 changelog grouped by area, with a **Breaking changes** section whenever a
 consuming project must edit something to upgrade, closing with:
 
 ```
-**Full Changelog**: https://github.com/goddtriffin/webserver-base/compare/vPREV...vX.Y.Z
+**Full Changelog**: https://github.com/goddtriffin/toddstack/compare/PREV...webserver-base-vX.Y.Z
 ```
 
-`vPREV` is the previous **tag**, which is not always the previous release — tags
+`PREV` is the previous webserver-base **tag** (`v0.3.0` for the first release after the rename), which is not always the previous release — tags
 and releases have drifted here before. Check both, and when a tag was never
 released, cover its contents in this changelog so nothing goes undocumented.
 
@@ -196,7 +202,7 @@ until step 8 has landed.
 Confirm the embedded assets are in the packaged crate:
 
 ```sh
-cargo package --list -p webserver-base | grep '^assets/'
+(cd rust && cargo package --list -p webserver-base | grep '^assets/')
 ```
 
 Two lines of output. Empty output is the dirty-tree refusal on stderr, not a
@@ -205,14 +211,14 @@ the `assets/**` invariant in contribution-guide's `architecture.md`.
 
 ## 12. Publish Rust
 
-`cargo publish --package webserver-base`. **Irreversible** — crates.io allows
+`cd rust && cargo publish --package webserver-base`. **Irreversible** — crates.io allows
 yanking, never deletion.
 
 ## 13. Publish TypeScript — the user's step
 
 `deno publish` needs interactive browser auth and fails in an agent shell with
 `error: No means to authenticate`. Do not work around this and do not handle a
-token. Ask the user to run `! deno publish` themselves.
+token. Ask the user to run `! cd typescript && deno publish` themselves.
 
 ---
 

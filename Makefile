@@ -19,48 +19,56 @@ help: # Prints out help
 	done
 	@echo
 
+# Paths. The repo root holds one directory per language. The template web
+# server is a whole site (crate + html/ + static/), so its directory is the
+# site root the asset pipeline runs in: every pipeline command `cd`s there
+# first, and every `rm` is relative to it, so a failed `cd` stops the recipe
+# before anything is removed.
+RUST := rust
+TS := typescript
+TWS := rust/template_web_server
+# The TypeScript package, seen from inside $(TWS).
+TS_FROM_TWS := ../../typescript
+
 .PHONY: watch_sass
 watch_sass: ## hot reloads Sass stylesheets
-	sass --watch --update --style=compressed --no-source-map --color --unicode static/scss:bin/static/stylesheet
+	cd $(TWS) && sass --watch --update --style=compressed --no-source-map --color --unicode static/scss:bin/static/stylesheet
 
 .PHONY: gen_js
 gen_js: # generates Javascript from Typescript
 	# generate/clean bin scripts
-	rm -rf bin/static/script
-	mkdir -p bin/static/script
+	cd $(TWS) && rm -rf bin/static/script && mkdir -p bin/static/script
 
-	# generate Javascript from Typescript
-	deno run \
+	# generate Javascript from Typescript. The bundler reads static/script/ and
+	# writes bin/static/script/ relative to the working directory (the site
+	# root); its own imports resolve through the TypeScript package's config.
+	cd $(TWS) && deno run \
+		--config $(TS_FROM_TWS)/deno.jsonc \
 		--allow-read \
 		--allow-write \
 		--allow-env \
 		--allow-net \
 		--allow-run \
-		static/script/webserver-base/bundle.ts
+		$(TS_FROM_TWS)/webserver-base/bundle.ts
 
 .PHONY: gen_css
 gen_css: # generate CSS from SCSS
 	# generate/clean bin stylesheets
-	rm -rf bin/static/stylesheet
-	mkdir -p bin/static/stylesheet
+	cd $(TWS) && rm -rf bin/static/stylesheet && mkdir -p bin/static/stylesheet
 
 	# generate CSS from SCSS
-	sass --style=compressed --no-source-map --color --unicode static/scss:bin/static/stylesheet
+	cd $(TWS) && sass --style=compressed --no-source-map --color --unicode static/scss:bin/static/stylesheet
 
 .PHONY: gen_static
 gen_static: # copies the non-generated static resources into bin
 	# generate/clean bin
-	rm -rf bin/assets/
-	rm -rf bin/html/
-	rm -rf bin/static/file/
-	rm -rf bin/static/image/
-	rm -f bin/cache-buster.json
-	mkdir -p bin/static
+	cd $(TWS) && rm -rf bin/assets/ bin/html/ bin/static/file/ bin/static/image/ && rm -f bin/cache-buster.json
+	cd $(TWS) && mkdir -p bin/static
 
 	# copy over: html, files, images
-	cp -R html bin/html
-	[ -d static/file ] && cp -R static/file bin/static/file || true
-	cp -R static/image bin/static/image
+	cd $(TWS) && cp -R html bin/html
+	cd $(TWS) && { [ -d static/file ] && cp -R static/file bin/static/file || true; }
+	cd $(TWS) && cp -R static/image bin/static/image
 
 .PHONY: gen_static_assets
 gen_static_assets: # derives the icon set, then hashes everything but the scripts
@@ -68,35 +76,34 @@ gen_static_assets: # derives the icon set, then hashes everything but the script
 	# generates favicon.ico / apple-touch-icon / icon-192 / icon-512 from
 	# favicon.svg, hashes every non-script asset, and writes cache-buster.json
 	# plus the TypeScript module the JS build inlines.
-	cd bin && WSB_ENVIRONMENT=local ./template-web-server gen-static-assets
+	cd $(TWS)/bin && WSB_ENVIRONMENT=local ./template-web-server gen-static-assets
 
 	# The bundler reads the source tree, so the generated module has to exist
 	# there too. Both copies are build output; neither is committed.
-	mkdir -p static/script/generated
-	cp bin/static/script/generated/cache-buster.ts static/script/generated/cache-buster.ts
+	cd $(TWS) && mkdir -p static/script/generated && cp bin/static/script/generated/cache-buster.ts static/script/generated/cache-buster.ts
 
 .PHONY: gen_static_scripts
 gen_static_scripts: # hashes the built JavaScript, once it exists
-	cd bin && WSB_ENVIRONMENT=local ./template-web-server gen-static-scripts
+	cd $(TWS)/bin && WSB_ENVIRONMENT=local ./template-web-server gen-static-scripts
 
 .PHONY: assets
-assets: ## builds the site into bin/, which dev serves and the tests drive
+assets: ## builds the template site into rust/template_web_server/bin/, which dev serves and the tests drive
 	# Order matters. Icons and hashing must precede the JS build, because the
 	# bundler inlines the manifest; the scripts are hashed after they exist.
-	cargo build --package template-web-server --bin template-web-server
+	cd $(RUST) && cargo build --package template-web-server --bin template-web-server
 	$(MAKE) gen_static
 	$(MAKE) gen_css
-	mkdir -p bin && cp target/debug/template-web-server bin/
+	mkdir -p $(TWS)/bin && cp $(RUST)/target/debug/template-web-server $(TWS)/bin/
 	$(MAKE) gen_static_assets
 	$(MAKE) gen_js
 	$(MAKE) gen_static_scripts
 
 .PHONY: dev
-dev: assets ## runs the development binary
+dev: assets ## runs the template web server's development binary
 	set -e; \
-	PORT="$${PORT:-$$(deno run --allow-net --allow-run=lsof static/script/webserver-base/free-port.ts template-web-server)}"; \
+	PORT="$${PORT:-$$(cd $(TS) && deno run --allow-net --allow-run=lsof webserver-base/free-port.ts template-web-server)}"; \
 	echo "==> http://127.0.0.1:$$PORT"; \
-	cd bin && \
+	cd $(TWS)/bin && \
 		WSB_PORT="$$PORT" \
 		WSB_ENVIRONMENT="local" \
 		TWS_PROJECT="Template Web Server" \
@@ -106,65 +113,65 @@ dev: assets ## runs the development binary
 
 .PHONY: lint
 lint: ## lints the codebase
-	deno lint static/script/
-	deno doc --lint static/script/
-	deno fmt static/script/
+	cd $(TS) && deno lint webserver-base/
+	cd $(TS) && deno doc --lint webserver-base/
+	cd $(TS) && deno fmt webserver-base/
 
-	cargo fmt
+	cd $(RUST) && cargo fmt
 
 .PHONY: test
 test: assets ## runs tests; the template's tests serve the bin/ that assets builds
-	deno check static/script/
+	cd $(TS) && deno check webserver-base/
 	# --allow-net: free-port's tests bind real sockets to verify port detection
-	deno test --allow-net
+	cd $(TS) && deno test --allow-net
 
-	cargo fmt --check
-	cargo check --all-features
-	cargo clippy --workspace --all-targets --all-features -- -D warnings
-	cargo test --all-features
+	cd $(RUST) && cargo fmt --check
+	cd $(RUST) && cargo check --all-features
+	cd $(RUST) && cargo clippy --workspace --all-targets --all-features -- -D warnings
+	cd $(RUST) && cargo test --all-features
 
 .PHONY: fix
 fix: ## fixes the codebase
-	cargo fix --all-features --allow-dirty --allow-staged
-	cargo clippy --workspace --all-targets --all-features --fix --allow-dirty --allow-staged
+	cd $(RUST) && cargo fix --all-features --allow-dirty --allow-staged
+	cd $(RUST) && cargo clippy --workspace --all-targets --all-features --fix --allow-dirty --allow-staged
 
 .PHONY: docs
 docs: ## generates local documentation
-	deno doc --html --name="webserver-base" ./static/script/webserver-base/
+	cd $(TS) && deno doc --html --name="webserver-base" ./webserver-base/
 
 .PHONY: publish_dry_run
 publish_dry_run: ## dry run of publishing libraries to crates.io and JSR
 	echo "\033[1;35m[Packaging Rust]\033[0m"
-	cargo publish --package webserver-base --dry-run
-	cargo package --list
+	cd $(RUST) && cargo publish --package webserver-base --dry-run
+	cd $(RUST) && cargo package --package webserver-base --list
 
 	echo "\033[1;35m[Packaging Typescript]\033[0m"
-	deno publish --dry-run --allow-dirty
+	cd $(TS) && deno publish --dry-run --allow-dirty
 
 	echo "\033[1;35m[Finished Dry-Run Publish]\033[0m"
 
 .PHONY: docker_build
-docker_build: ## builds Docker container
+docker_build: ## builds the template web server's Docker image (build context: the repo root)
 	docker build \
 		--platform linux/amd64 \
 		--tag goddtriffin/template-web-server:latest \
-		--file Dockerfile \
+		--file $(TWS)/Dockerfile \
 		.
 
 .PHONY: docker_run
 docker_run: ## runs Docker containers
 	set -e; \
-	HOST_PORT="$${HOST_PORT:-$$(deno run --allow-net --allow-run=lsof static/script/webserver-base/free-port.ts template-web-server)}"; \
+	HOST_PORT="$${HOST_PORT:-$$(cd $(TS) && deno run --allow-net --allow-run=lsof webserver-base/free-port.ts template-web-server)}"; \
 	echo "==> http://127.0.0.1:$$HOST_PORT"; \
-	HOST_PORT="$$HOST_PORT" docker compose up -d
+	cd $(TWS) && HOST_PORT="$$HOST_PORT" docker compose up -d
 
 .PHONY: docker_stop
 docker_stop: ## stops Docker containers
-	docker compose down
+	cd $(TWS) && docker compose down
 
 .PHONY: docker_logs
 docker_logs: ## displays Docker logs
-	docker compose logs template_web_server -f
+	cd $(TWS) && docker compose logs template_web_server -f
 
 .PHONY: docker_mem_usage
 docker_mem_usage: ## displays the memory usage of the currently running Docker containers

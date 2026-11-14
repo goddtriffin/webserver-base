@@ -1,6 +1,6 @@
 ---
 name: contribution-guide
-description: Use when writing, reviewing, refactoring, testing, or documenting any code in this repository — before editing Rust or TypeScript sources, adding or changing a feature, touching Cargo.toml or deno.jsonc, adding a dependency or feature gate, writing tests, choosing a log level, or updating README.md. Invoke it at the start of any change here, however small. Use the separate rollout skill when shipping a finished change.
+description: Use when writing, reviewing, refactoring, testing, or documenting any code in this repository — before editing Rust or TypeScript sources, adding or changing a feature, touching rust/Cargo.toml or typescript/deno.jsonc, adding a dependency or feature gate, writing tests, choosing a log level, or updating a README. Invoke it at the start of any change here, however small. Use the separate rollout skill when shipping a finished change.
 ---
 
 # Contribution Guide
@@ -57,8 +57,9 @@ dependency tree. It belongs to the rollout smoke test and nowhere else.
 **Never hand-edit a build output.** `cache-buster.json`,
 `static/script/generated/` and everything under `bin/` are generated. A lint or
 type failure in one is a bug in the *generator* under
-`webserver_base/src/assets/` — fix it there and regenerate.
+`rust/webserver_base/src/assets/` — fix it there and regenerate.
 
-**A feature that is not in `README.md` is a documentation bug.** Every feature
-created, modified or deleted updates the README in the same change. See
+**A feature that is not in its package's README is a documentation bug.** Every
+feature created, modified or deleted updates that README (`rust/README.md`,
+`typescript/README.md`) in the same change. See
 `code-style.md` for how to write the entry.

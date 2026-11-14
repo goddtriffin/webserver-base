@@ -2,14 +2,14 @@
   "name": "@todd/webserver-base",
   "version": "0.1.2",
   "exports": {
-    ".": "./static/script/webserver-base/mod.ts",
-    "./bundle": "./static/script/webserver-base/bundle.ts",
-    "./free-port": "./static/script/webserver-base/free-port.ts",
-    "./logger": "./static/script/webserver-base/logger.ts"
+    ".": "./webserver-base/mod.ts",
+    "./bundle": "./webserver-base/bundle.ts",
+    "./free-port": "./webserver-base/free-port.ts",
+    "./logger": "./webserver-base/logger.ts"
   },
   "publish": {
     "include": [
-      "static/script/webserver-base/**/*.ts",
+      "webserver-base/**/*.ts",
       "deno.*",
       "LICENSE",
       "README.md"

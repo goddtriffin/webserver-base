@@ -17,5 +17,9 @@ what it points to exists because breaking it fails silently, remotely, or only
 for consumers of the published crate — so the cost of skipping it is not visible
 at the time you skip it.
 
-`README.md` is the consumer-facing reference for both libraries; keep it current
-as part of any feature change.
+This repo is **toddstack**: shared code for all of Todd's projects, one
+top-level directory per language (`rust/`, `typescript/`). The root `README.md`
+maps the packages; each package's own README (`rust/README.md`,
+`typescript/README.md`) is its consumer-facing reference: keep it current as
+part of any feature change. Run everything from the repo root via the
+`Makefile`.

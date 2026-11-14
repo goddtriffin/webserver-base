@@ -14,7 +14,7 @@ use webserver_base::Environment;
 use webserver_base::analytics::AnalyticsConfig;
 use webserver_base::webserver::{Shutdown, WebServer};
 
-const BIN: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../bin");
+const BIN: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/bin");
 
 fn router() -> Router {
     let settings: Settings = Settings {
