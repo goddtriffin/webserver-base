@@ -25,7 +25,7 @@ pub struct Event {
     /// Unique per event; repeated on retries.
     pub id: String,
     /// `user.updated`, `user.deleted`, `user.suspended`, `user.reactivated`,
-    /// or `grant.revoked`.
+    /// `user.signed_out`, or `grant.revoked`.
     #[serde(rename = "type")]
     pub kind: String,
     pub created_at: i64,

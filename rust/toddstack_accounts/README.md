@@ -50,9 +50,14 @@ let event = toddstack_accounts::webhook::verify(webhook_secret, signature_header
 match event.kind.as_str() {
     "user.deleted" => { /* delete or anonymize event.sub()'s rows */ }
     "user.updated" => { /* refresh cached username / picture */ }
+    "user.signed_out" | "user.suspended" | "grant.revoked" => { /* end event.sub()'s sessions */ }
     _ => {}
 }
 ```
+
+Your sessions are your own: accounts can't end them. On `user.signed_out` (the person signed out everywhere,
+changed or reset their password, or an admin signed them or everyone out), `user.suspended` and
+`grant.revoked`, delete every session you hold for `event.sub()`. Their refresh tokens are already revoked.
 
 Verify the raw body before parsing. Signatures older than 5 minutes are refused. Deliveries retry, so ignore
 repeated `event.id`s.
