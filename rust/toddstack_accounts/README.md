@@ -74,6 +74,9 @@ friends.post_event(&Event {
 }).await?;                                  // needs scope friends:events
 ```
 
+The person can mute your app's events, one kind or all (`friends.mute("daily_completed")`,
+`friends.mute(ALL_KINDS)`, `unmute`, `mutes()`), here or in Account Center.
+
 A block overrides everything (no requests, no events either way). Events go to friends' inboxes (`inbox()`),
 and will also go out as push notifications once the native apps exist.
 

@@ -113,6 +113,9 @@ fn field<T: for<'de> Deserialize<'de>>(mut value: Value, name: &str) -> Result<T
 }
 
 /// The API for one person (their access token).
+/// Mutes every event kind from your app.
+pub const ALL_KINDS: &str = "*";
+
 pub struct Friends<'a> {
     accounts: &'a Accounts,
     token: &'a str,
@@ -305,6 +308,40 @@ impl<'a> Friends<'a> {
     /// The request failed.
     pub async fn mark_read(&self, id: &str) -> Result<()> {
         self.call(reqwest::Method::POST, &format!("/inbox/{id}/read"), None)
+            .await
+            .map(|_| ())
+    }
+
+    /// The event kinds from your app the person has muted ([`ALL_KINDS`] means
+    /// all of them).
+    ///
+    /// # Errors
+    /// The request failed.
+    pub async fn mutes(&self) -> Result<Vec<String>> {
+        field(
+            self.call(reqwest::Method::GET, "/mutes", None).await?,
+            "mutes",
+        )
+    }
+
+    /// Stops friends' events of `kind` from your app reaching the person
+    /// ([`ALL_KINDS`] for every kind). The person can also do this in Account
+    /// Center.
+    ///
+    /// # Errors
+    /// Malformed kind, or the request failed.
+    pub async fn mute(&self, kind: &str) -> Result<()> {
+        self.call(reqwest::Method::PUT, &format!("/mutes/{kind}"), None)
+            .await
+            .map(|_| ())
+    }
+
+    /// Undoes [`Friends::mute`].
+    ///
+    /// # Errors
+    /// The request failed.
+    pub async fn unmute(&self, kind: &str) -> Result<()> {
+        self.call(reqwest::Method::DELETE, &format!("/mutes/{kind}"), None)
             .await
             .map(|_| ())
     }
