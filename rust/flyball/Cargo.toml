@@ -1,0 +1,26 @@
+[package]
+name = "flyball"
+# Versioned on its own, not with the workspace (webserver-base's version).
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+readme = "README.md"
+repository.workspace = true
+homepage.workspace = true
+description = "Keyed rate limiting behind one trait: an exact, memory-bounded in-memory GCRA limiter with zero dependencies, plus a mock for tests."
+license-file.workspace = true
+keywords = ["rate-limit", "gcra", "throttle", "toddstack"]
+categories = ["algorithms", "concurrency", "web-programming"]
+include = ["**/*.rs", "Cargo.toml", "LICENSE", "README.md"]
+
+[lints]
+workspace = true
+
+# Zero dependencies, on purpose: a rate limiter sits in front of every
+# sign-in and API call, so it should be small enough to read in one sitting.
+
+[features]
+# `MockRateLimiter`. Enable it from `[dev-dependencies]` only: cargo unifies
+# features, so enabling it in `[dependencies]` ships the mock to production.
+mock = []
