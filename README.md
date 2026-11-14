@@ -10,6 +10,7 @@ published on its own and documented in its own README.
 |---|---|---|---|
 | `webserver-base` | Rust | [crates.io](https://crates.io/crates/webserver-base) | [`rust/README.md`](rust/README.md) |
 | `@todd/webserver-base` | TypeScript | [JSR](https://jsr.io/@todd/webserver-base) | [`typescript/README.md`](typescript/README.md) |
+| `flyball` | Rust | not yet published | [`rust/flyball/README.md`](rust/flyball/README.md) |
 | `template-web-server` | Rust | not published; Docker image for several sites | [`rust/template_web_server/`](rust/template_web_server/) |
 
 ## Layout
@@ -18,6 +19,7 @@ published on its own and documented in its own README.
 rust/              Cargo workspace: every Rust crate
   webserver_base/        the web server library
   template_web_server/   a complete site built on it (crate + html/ + static/ + Dockerfile)
+  flyball/               keyed rate limiting: one trait, in-memory and mock implementations
 typescript/        JSR packages (deno.jsonc is the package config)
   webserver-base/        the browser/build-side half of webserver-base
 ```
