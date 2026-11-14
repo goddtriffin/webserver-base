@@ -1,5 +1,5 @@
 [workspace]
-members = ["webserver_base", "template_web_server", "flyball"]
+members = ["webserver_base", "template_web_server", "flyball", "toddstack_accounts"]
 resolver = "3"
 
 [workspace.package]

@@ -11,6 +11,7 @@ published on its own and documented in its own README.
 | `webserver-base` | Rust | [crates.io](https://crates.io/crates/webserver-base) | [`rust/README.md`](rust/README.md) |
 | `@todd/webserver-base` | TypeScript | [JSR](https://jsr.io/@todd/webserver-base) | [`typescript/README.md`](typescript/README.md) |
 | `flyball` | Rust | not yet published | [`rust/flyball/README.md`](rust/flyball/README.md) |
+| `toddstack-accounts` | Rust | not yet published | [`rust/toddstack_accounts/README.md`](rust/toddstack_accounts/README.md) |
 | `template-web-server` | Rust | not published; Docker image for several sites | [`rust/template_web_server/`](rust/template_web_server/) |
 
 ## Layout
@@ -20,6 +21,7 @@ rust/              Cargo workspace: every Rust crate
   webserver_base/        the web server library
   template_web_server/   a complete site built on it (crate + html/ + static/ + Dockerfile)
   flyball/               keyed rate limiting: one trait, in-memory and mock implementations
+  toddstack_accounts/    client for the shared accounts: sign-in, tokens, webhooks, friends
 typescript/        JSR packages (deno.jsonc is the package config)
   webserver-base/        the browser/build-side half of webserver-base
 ```
@@ -39,5 +41,5 @@ Everything runs from the repo root through the `Makefile` (`make help`).
 Rules live in the skills, not here. Invoke `contribution-guide` before any
 change to this repo.
 
-Releases are tagged per package: `webserver-base-vX.Y.Z` (tags up to `v0.3.0`
+Releases are tagged per package: `webserver-base-vX.Y.Z`, `toddstack-accounts-vX.Y.Z` (tags up to `v0.3.0`
 predate the rename from `goddtriffin/webserver-base`).
