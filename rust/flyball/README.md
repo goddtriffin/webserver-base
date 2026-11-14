@@ -14,6 +14,12 @@ startup:
 A shared store (Redis, Memcached) can implement the same trait later, for
 projects that run several replicas, without any caller changing.
 
+## Why "flyball"
+
+A rate limiter is a governor: it keeps something from running too fast. The
+classic one is the flyball governor on James Watt's steam engines, two spinning
+weights that throttle the engine as it speeds up.
+
 ## Install
 
 ```toml
