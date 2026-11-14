@@ -18,9 +18,7 @@ projects that run several replicas, without any caller changing.
 
 A rate limiter is a governor: it keeps something from running too fast. The
 classic one is the flyball governor on James Watt's steam engines, two spinning
-weights that throttle the engine as it speeds up. The name `governor` was
-already taken on crates.io by another rate-limiting crate, so this one is named
-after the device itself.
+weights that throttle the engine as it speeds up.
 
 ## Install
 
