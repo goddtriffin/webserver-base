@@ -81,9 +81,10 @@ that a name would add nothing.
 
 ## Documentation
 
-**Every time a feature is created, modified, or deleted, `README.md` must be
-updated under the relevant section** — "The Rust library" or "The TypeScript
-library". A feature that is not in the README is a documentation bug.
+**Every time a feature is created, modified, or deleted, its package's README
+must be updated** — `rust/README.md` for the Rust library, `typescript/README.md`
+for the TypeScript library. A feature that is not in the README is a
+documentation bug.
 
 - Write from the **consumer's** perspective: how to use it properly, and what it
   does for them. Not how it is implemented.

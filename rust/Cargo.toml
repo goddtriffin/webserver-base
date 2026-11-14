@@ -8,10 +8,10 @@ edition = "2024"
 rust-version = "1.100"
 authors = ["Todd Everett Griffin <tgriffin115@gmail.com>"]
 readme = "README.md"
-repository = "https://github.com/goddtriffin/webserver-base"
+repository = "https://github.com/goddtriffin/toddstack"
 homepage = "https://www.toddgriffin.me/"
 description = "A Rust library which contains shared logic for all of my webserver projects."
-license-file = "LICENSE"
+license-file = "../LICENSE"
 keywords = ["Todd", "Everett", "Griffin", "webserver", "base"]
 categories = ["web-programming"]
 # `assets/**` is load-bearing: the base layout and humans.txt are pulled in with

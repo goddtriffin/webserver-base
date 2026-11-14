@@ -13,4 +13,4 @@ docs/
 # anything reads it, so there is no bootstrap reason to commit either — and a
 # stale committed copy could silently feed the JS build.
 cache-buster.json
-static/script/generated/
+**/static/script/generated/

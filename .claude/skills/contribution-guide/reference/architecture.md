@@ -26,7 +26,7 @@ viewport string, and the whole of `<head>`.
 Break one of these and the failure is silent or remote, so they are worth
 stating:
 
-- **`assets/**` must stay in `Cargo.toml`'s `include` list.** The base layout
+- **`assets/**` must stay in `rust/Cargo.toml`'s `include` list.** The base layout
   and `humans.txt` are pulled in with `include_str!`; omitting them compiles
   locally and fails for every consumer of the published crate.
 - **`base` is a reserved template name.** It is embedded, and `from_dir` errors
