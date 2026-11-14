@@ -10,8 +10,8 @@ published on its own and documented in its own README.
 |---|---|---|---|
 | `webserver-base` | Rust | [crates.io](https://crates.io/crates/webserver-base) | [`rust/README.md`](rust/README.md) |
 | `@todd/webserver-base` | TypeScript | [JSR](https://jsr.io/@todd/webserver-base) | [`typescript/README.md`](typescript/README.md) |
-| `flyball` | Rust | not yet published | [`rust/flyball/README.md`](rust/flyball/README.md) |
-| `toddstack-accounts` | Rust | not yet published | [`rust/toddstack_accounts/README.md`](rust/toddstack_accounts/README.md) |
+| `flyball` | Rust | [crates.io](https://crates.io/crates/flyball) | [`rust/flyball/README.md`](rust/flyball/README.md) |
+| `toddstack-accounts` | Rust | [crates.io](https://crates.io/crates/toddstack-accounts) | [`rust/toddstack_accounts/README.md`](rust/toddstack_accounts/README.md) |
 | `template-web-server` | Rust | not published; Docker image for several sites | [`rust/template_web_server/`](rust/template_web_server/) |
 
 ## Layout
